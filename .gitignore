@@ -104,3 +104,6 @@ InitTestScene*.unity*
 
 # Auto-generated cache in Assets folder
 /[Aa]ssets/[Ss]ceneDependencyCache*
+
+# LLMUnity native libraries (auto-downloaded on editor load)
+/[Aa]ssets/[Ss]treaming[Aa]ssets/LlamaLib-*
