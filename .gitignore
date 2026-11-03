@@ -19,6 +19,14 @@
 *.blend1
 *.blend1.meta
 
+# AI
+/.cursor/
+/.codex/
+/.ai/
+/tmp/
+
+/AGENTS.md
+
 # MemoryCaptures can get excessive in size.
 # They also could contain extremely sensitive data
 /[Mm]emoryCaptures/

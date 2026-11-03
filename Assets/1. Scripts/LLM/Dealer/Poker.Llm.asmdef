@@ -1,0 +1,7 @@
+{
+  "name": "Poker.Llm",
+  "rootNamespace": "Poker.Llm",
+  "references": ["Poker.Core", "Poker.Application"],
+  "noEngineReferences": true,
+  "autoReferenced": true
+}

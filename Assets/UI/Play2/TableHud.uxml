@@ -1,0 +1,39 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="TableHud.uss" />
+    <ui:VisualElement name="table-hud" class="screen table-hud hidden" picking-mode="Ignore">
+        <ui:VisualElement class="table-top" picking-mode="Ignore">
+            <ui:Button name="table-leave" text="← 나가기" class="action quiet" />
+            <ui:Label name="table-street" class="street-banner" />
+            <ui:Label name="table-pot" class="pot-banner" />
+        </ui:VisualElement>
+        <ui:VisualElement name="table-seats" class="table-seats" picking-mode="Ignore" />
+        <ui:Label name="table-notice" class="table-notice hidden" picking-mode="Ignore" />
+        <ui:VisualElement class="table-bottom" picking-mode="Ignore">
+            <ui:VisualElement class="table-controls" picking-mode="Ignore">
+                <ui:Label name="table-turn" class="turn-status" />
+                <ui:Label name="table-feedback" class="turn-status hidden" />
+                <ui:VisualElement name="table-sizing" class="sizing hidden">
+                    <ui:Label name="table-target" class="hud-title" />
+                    <ui:SliderInt name="table-slider" />
+                    <ui:VisualElement class="hud-row presets">
+                        <ui:Button name="table-min" text="최소" class="preset min" />
+                        <ui:Button name="table-half" text="하프" class="preset half" />
+                        <ui:Button name="table-all" text="올인" class="preset all-in" />
+                    </ui:VisualElement>
+                    <ui:Button name="table-commit" text="확정" class="action primary" />
+                </ui:VisualElement>
+                <ui:VisualElement name="table-accusation" class="sizing hidden">
+                    <ui:DropdownField name="table-suspect" label="고발 대상" />
+                    <ui:Button name="table-accuse-confirm" text="고발하기" class="action primary" />
+                </ui:VisualElement>
+                <ui:VisualElement class="hud-row">
+                    <ui:Button name="table-fold" text="폴드" class="move fold" />
+                    <ui:Button name="table-call" text="콜" class="move call" />
+                    <ui:Button name="table-raise" text="레이즈" class="move raise" />
+                    <ui:Button name="table-accuse" text="고발" class="action quiet" />
+                </ui:VisualElement>
+                <ui:Button name="table-next" class="action primary hidden" />
+            </ui:VisualElement>
+        </ui:VisualElement>
+    </ui:VisualElement>
+</ui:UXML>

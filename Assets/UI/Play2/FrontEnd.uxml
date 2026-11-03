@@ -1,0 +1,67 @@
+<ui:UXML xmlns:ui="UnityEngine.UIElements">
+    <ui:Style src="FrontEnd.uss" />
+    <ui:Template name="hud" src="TableHud.uxml" />
+    <ui:VisualElement class="shell">
+        <ui:VisualElement name="title" class="screen title">
+            <ui:Label text="♠   ♥   ♣   ♦" class="suits" />
+            <ui:Label text="ONE MORE CARD" class="wordmark" />
+            <ui:Label text="한 장만 더" class="subtitle" />
+            <ui:VisualElement class="menu">
+                <ui:Button name="join" class="card accent">
+                    <ui:Label text="A  ♠" class="rank" picking-mode="Ignore" />
+                    <ui:Label text="참여하기" class="card-title" picking-mode="Ignore" />
+                    <ui:Label text="방 코드로 입장" class="card-detail" picking-mode="Ignore" />
+                    <ui:Label text="♠  A" class="rank end" picking-mode="Ignore" />
+                </ui:Button>
+                <ui:Button name="host" class="card">
+                    <ui:Label text="K  ♥" class="rank red" picking-mode="Ignore" />
+                    <ui:Label text="방 만들기" class="card-title" picking-mode="Ignore" />
+                    <ui:Label text="최대 4인 온라인" class="card-detail" picking-mode="Ignore" />
+                    <ui:Label text="♥  K" class="rank red end" picking-mode="Ignore" />
+                </ui:Button>
+                <ui:Button name="local" class="card dark">
+                    <ui:Label text="Q  ♣" class="rank" picking-mode="Ignore" />
+                    <ui:Label text="로컬 프리뷰" class="card-title" picking-mode="Ignore" />
+                    <ui:Label text="혼자 배분 연출 확인" class="card-detail" picking-mode="Ignore" />
+                    <ui:Label text="♣  Q" class="rank end" picking-mode="Ignore" />
+                </ui:Button>
+            </ui:VisualElement>
+            <ui:Button name="quit" text="게임 종료" class="action quiet" />
+        </ui:VisualElement>
+        <ui:VisualElement name="form" class="screen modal hidden">
+            <ui:VisualElement class="dialog">
+                <ui:Label name="form-title" class="heading" />
+                <ui:VisualElement name="room-fields">
+                    <ui:TextField name="nickname" label="닉네임" maxlength="20" />
+                    <ui:TextField name="room-code" label="방 코드" maxlength="24" />
+                    <ui:DropdownField name="capacity" label="방 인원" />
+                </ui:VisualElement>
+                <ui:Label name="form-detail" class="detail" />
+                <ui:VisualElement class="actions">
+                    <ui:Button name="cancel" text="뒤로" class="action quiet" />
+                    <ui:Button name="confirm" class="action primary" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:VisualElement name="lobby" class="screen lobby hidden">
+            <ui:VisualElement class="lobby-top">
+                <ui:Button name="leave" text="← 방 나가기" class="action quiet" />
+                <ui:VisualElement class="lobby-heading">
+                    <ui:Label text="ONE MORE CARD" class="eyebrow" />
+                    <ui:Label name="room-label" class="heading" />
+                </ui:VisualElement>
+                <ui:Button name="copy" text="방 코드 복사" class="action quiet" />
+            </ui:VisualElement>
+            <ui:VisualElement name="seats" class="seats" />
+            <ui:VisualElement class="lobby-bottom">
+                <ui:Label name="lobby-detail" class="detail" />
+                <ui:VisualElement class="actions">
+                    <ui:Button name="ready" class="action quiet" />
+                    <ui:Button name="start" text="게임 시작" class="action primary" />
+                </ui:VisualElement>
+            </ui:VisualElement>
+        </ui:VisualElement>
+        <ui:Instance template="hud" class="screen" picking-mode="Ignore" />
+        <ui:VisualElement name="curtain" class="screen curtain hidden" picking-mode="Ignore" />
+    </ui:VisualElement>
+</ui:UXML>

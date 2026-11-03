@@ -41,9 +41,16 @@ public sealed class CardVisual : MonoBehaviour
 #if UNITY_EDITOR
     public void ApplyInspectorCard()
     {
+        // 프리팹에 저장되지 않는 미리보기 메시를 넣으면 저장 시 메시 참조가 비어 버린다.
+        if (UnityEditor.EditorUtility.IsPersistent(this)
+            || UnityEditor.SceneManagement.PrefabStageUtility.GetPrefabStage(gameObject) != null)
+        {
+            return;
+        }
+
         if (!Application.isPlaying)
         {
-            CreatePreviewMesh();
+            UsePreviewMesh();
         }
 
         SetCard(CurrentCard);
@@ -52,15 +59,10 @@ public sealed class CardVisual : MonoBehaviour
 
     private void Awake()
     {
-        if (!Application.isPlaying || frontMeshFilter == null || frontMeshFilter.sharedMesh == null)
+        if (Application.isPlaying)
         {
-            return;
+            RefreshMesh();
         }
-
-        runtimeMesh = Instantiate(frontMeshFilter.sharedMesh);
-        runtimeMesh.name = "Card Front Runtime";
-        frontMeshFilter.sharedMesh = runtimeMesh;
-        RefreshMesh();
     }
 
     private void OnDestroy()
@@ -79,45 +81,67 @@ public sealed class CardVisual : MonoBehaviour
     }
 
 #if UNITY_EDITOR
-    private void CreatePreviewMesh()
+    private void UsePreviewMesh()
     {
-        if (frontMeshFilter == null || frontMeshFilter.sharedMesh == null)
+        if (frontMeshFilter == null)
         {
             return;
         }
 
-        if (previewMesh != null && frontMeshFilter.sharedMesh == previewMesh)
+        if (previewMesh == null)
         {
-            return;
+            previewMesh = new Mesh { name = "Card Front Preview", hideFlags = HideFlags.DontSave };
         }
 
-        if (previewMesh != null)
-        {
-            DestroyImmediate(previewMesh);
-        }
-
-        previewMesh = Instantiate(frontMeshFilter.sharedMesh);
-        previewMesh.name = "Card Front Preview";
-        previewMesh.hideFlags = HideFlags.DontSave;
         frontMeshFilter.sharedMesh = previewMesh;
     }
 #endif
 
     private void RefreshMesh()
     {
-        if (frontMeshFilter == null || frontMeshFilter.sharedMesh == null)
+        Mesh mesh = GetWritableMesh();
+        if (mesh == null)
         {
             return;
         }
 
         if (rank == 2)
         {
-            BuildTwoMesh(frontMeshFilter.sharedMesh, suit);
+            BuildTwoMesh(mesh, suit);
             return;
         }
 
         GetAtlasCell(rank, suit, out int column, out int row);
-        BuildFullCardMesh(frontMeshFilter.sharedMesh, column, row);
+        BuildFullCardMesh(mesh, column, row);
+    }
+
+    // 미리보기 메시는 저장되지 않아 씬·프리팹에 빈 참조로 남을 수 있으므로, 비어 있으면 새 메시를 만든다.
+    private Mesh GetWritableMesh()
+    {
+        if (frontMeshFilter == null)
+        {
+            return null;
+        }
+
+        if (Application.isPlaying)
+        {
+            if (runtimeMesh == null)
+            {
+                runtimeMesh = new Mesh { name = "Card Front Runtime" };
+                frontMeshFilter.sharedMesh = runtimeMesh;
+            }
+
+            return runtimeMesh;
+        }
+
+#if UNITY_EDITOR
+        if (frontMeshFilter.sharedMesh == null)
+        {
+            UsePreviewMesh();
+        }
+#endif
+
+        return frontMeshFilter.sharedMesh;
     }
 
     private static void BuildFullCardMesh(Mesh mesh, int column, int row)

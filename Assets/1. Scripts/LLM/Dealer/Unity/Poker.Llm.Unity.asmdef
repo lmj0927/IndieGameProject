@@ -1,0 +1,10 @@
+{
+  "name": "Poker.Llm.Unity",
+  "rootNamespace": "Poker.Llm.Unity",
+  "references": ["Poker.Llm", "undream.llmunity.Runtime"],
+  "autoReferenced": true,
+  "defineConstraints": ["OMC_LLMUNITY"],
+  "versionDefines": [
+    { "name": "ai.undream.llm", "expression": "3.0.0", "define": "OMC_LLMUNITY" }
+  ]
+}

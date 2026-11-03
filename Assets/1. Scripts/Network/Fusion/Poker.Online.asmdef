@@ -1,0 +1,6 @@
+{
+  "name": "Poker.Online",
+  "rootNamespace": "Poker.Online",
+  "references": ["Poker.Core", "Poker.Application", "Poker.Transport", "Poker.Llm", "Fusion.Unity", "Photon.Realtime"],
+  "autoReferenced": true
+}

@@ -1,0 +1,11 @@
+{
+  "name": "Poker.Core.Tests",
+  "rootNamespace": "Poker.Foundation.Tests",
+  "references": ["Poker.Core", "Poker.Application", "Poker.Transport", "Poker.Llm", "Poker.Online"],
+  "includePlatforms": ["Editor"],
+  "optionalUnityReferences": ["TestAssemblies"],
+  "overrideReferences": true,
+  "precompiledReferences": ["nunit.framework.dll", "Newtonsoft.Json.dll"],
+  "autoReferenced": false
+}
+

@@ -246,7 +246,7 @@ MeshRenderer:
   m_RenderingLayerMask: 1
   m_RendererPriority: 0
   m_Materials:
-  - {fileID: 2100000, guid: 812a3200b65747be891b95b5460c645a, type: 2}
+  - {fileID: 2100000, guid: 81afc2e042fa452bae5a0f40e2eba722, type: 2}
   m_StaticBatchInfo:
     firstSubMesh: 0
     subMeshCount: 0
@@ -339,6 +339,6 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: cd4694facf7b40b4d9c82316f816a835, type: 3}
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::CardVisual
-  rank: 3
+  rank: 4
   suit: 1
   frontMeshFilter: {fileID: 4860092854442929399}

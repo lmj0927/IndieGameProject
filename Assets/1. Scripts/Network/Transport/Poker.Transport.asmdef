@@ -1,0 +1,6 @@
+{
+  "name": "Poker.Transport",
+  "rootNamespace": "Poker.Transport",
+  "references": ["Poker.Core", "Poker.Application"],
+  "autoReferenced": true
+}
