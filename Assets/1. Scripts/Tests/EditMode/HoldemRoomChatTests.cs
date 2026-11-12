@@ -6,7 +6,7 @@ using Poker.Transport;
 
 namespace Poker.Foundation.Tests
 {
-    public sealed class HoldemRoomChatTests
+    public sealed partial class HoldemRoomChatTests
     {
         private HoldemRoom room;
         private Guid[] peers;
@@ -23,11 +23,11 @@ namespace Poker.Foundation.Tests
             HoldemUtteranceSeats.Active | HoldemUtteranceSeats.AllIn, HoldemUtteranceVisibility.OwnOnly,
             HoldemUtteranceBatchRetention.UntilHostAcknowledges);
 
-        private void Create(bool chat = true)
+        private void Create(bool chat = true, HoldemUtterancePolicy policy = null, IRandomSource random = null)
         {
             peers = Enumerable.Range(0, 4).Select(_ => Guid.NewGuid()).ToArray();
-            room = HoldemRoom.Create(Guid.NewGuid(), peers[0], "방장", LlmConfig(), new SeatId(1), new StableRandom(),
-                out _, utterancePolicy: PrivateRequests(), chatEnabled: chat);
+            room = HoldemRoom.Create(Guid.NewGuid(), peers[0], "방장", LlmConfig(), new SeatId(1), random ?? new StableRandom(),
+                out _, utterancePolicy: policy ?? PrivateRequests(), chatEnabled: chat);
             for (int i = 1; i < 4; i++) room.Join(peers[i], "참가자 " + i);
             foreach (var peer in peers) room.SetReady(peer, true);
         }

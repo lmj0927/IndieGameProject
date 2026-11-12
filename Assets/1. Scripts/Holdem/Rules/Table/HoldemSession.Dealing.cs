@@ -57,7 +57,11 @@ namespace Poker.Foundation
                 if (command.CardChange == null) candidate = currentHand.DealUnchanged(command.Street);
                 else
                 {
-                    if (!currentHand.TryDealWithCardChange(command.Street, command.CardChange, out candidate,
+                    // The session owns the full roster; a hand contains only dealt-in seats.
+                    var speaker = command.CardChange.Speaker;
+                    if (Array.IndexOf(roster, speaker) < 0) return Reject(command, HoldemCommandError.InvalidCardChange);
+                    bool allowBusted = !currentHand.WasDealtIn(speaker) && settledLedger.GetChips(speaker).Stack == 0;
+                    if (!currentHand.TryDealWithCardChange(command.Street, command.CardChange, allowBusted, out candidate,
                         out Card before, out int sourceDeckIndex))
                         return Reject(command, HoldemCommandError.InvalidCardChange);
                     if (before != command.CardChange.Card) mutation = new HoldemCardMutation(command.CardChange, before, sourceDeckIndex);

@@ -7,12 +7,12 @@ namespace Poker.Foundation
         // Build the changed deck and revealed hand before publishing either. The
         // original hand/deck remain unchanged if any validation or settlement fails.
         internal bool TryDealWithCardChange(HoldemStreet expectedStreet, HoldemCardChange change,
-            out HoldemHand candidate, out Card before, out int sourceDeckIndex)
+            bool allowBustedSpeaker, out HoldemHand candidate, out Card before, out int sourceDeckIndex)
         {
             candidate = null; before = default; sourceDeckIndex = -1;
             if (!IsDealPending || expectedStreet != PendingDealStreet || change == null
                 || Config.RevealPolicy != HoldemRevealPolicy.PauseAfterCommunityReveal
-                || !WasDealtIn(change.Speaker)
+                || (!WasDealtIn(change.Speaker) && !(allowBustedSpeaker && Config.BettingPolicy == HoldemBettingPolicy.NoLimit))
                 || (Config.BettingPolicy == HoldemBettingPolicy.SharedAnteFixed && IsFolded(change.Speaker))) return false;
             int count = PendingRevealCount;
             int remainingRunout = RemainingRunoutCount;

@@ -103,6 +103,7 @@ namespace Poker.Transport
         public HoldemRoomPacket Accept(HoldemRoomPacket packet)
         {
             if (packet == null) throw Invalid();
+            if (!eliminated) HoldemDealerSelectionPacketReader.Read(packet);
             if (eliminated && !packet.hasEliminatedSpeech)
             {
                 HoldemUtterancePacketReader.Read(packet, true);

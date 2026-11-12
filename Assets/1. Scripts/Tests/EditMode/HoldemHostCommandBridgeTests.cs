@@ -36,6 +36,19 @@ namespace Poker.Foundation.Tests
             }
         }
 
+        [Test]
+        public void SpectatorRequestRoomRejectsOlderClientBeforeBinding()
+        {
+            var host = new HoldemClientIdentity("Host");
+            using var updated = new HoldemHostCommandBridge(host, HoldemLlmTableDealer.CreateConfig(),
+                new SeatId(1), new StableRandom(), utterancePolicy: HoldemLlmTableDealer.CreateUtterancePolicy(), chatEnabled: true);
+            var connection = Guid.NewGuid();
+            var old = host.AdmissionRequest(); old.supportsSpectatorDealerRequests = false;
+            Assert.That(updated.Dispatch(connection, old).Response.error, Is.EqualTo("ClientUpgradeRequired"));
+            Assert.That(updated.TryGetBinding(connection, out _), Is.False);
+            Assert.That(updated.Dispatch(connection, host.AdmissionRequest()).Response.accepted, Is.True);
+        }
+
         private void CreateRoom(int capacity)
         {
             bridge?.Dispose();

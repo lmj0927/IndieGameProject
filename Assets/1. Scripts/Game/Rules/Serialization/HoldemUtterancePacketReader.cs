@@ -63,7 +63,9 @@ namespace Poker.Application
                 foreach (var seat in room.game.seats) if (seat != null && seat.seat == room.viewerSeat) viewer = seat;
             if (viewer == null || !viewer.viewer || (input.canSubmit || input.canDesignate)
                 && (eliminated ? viewer.dealtIn || viewer.status != (int)HoldemSeatStatus.Busted
-                    : !viewer.dealtIn || viewer.status == (int)HoldemSeatStatus.Busted))
+                    : (!viewer.dealtIn || viewer.status == (int)HoldemSeatStatus.Busted)
+                        && !(room.game.bettingPolicy == (int)HoldemBettingPolicy.NoLimit
+                            && !viewer.dealtIn && viewer.status == (int)HoldemSeatStatus.Busted)))
                 throw Invalid();
             if (eliminated && viewer.dealtIn && input.entries.Length > 0) throw Invalid();
             if (shared && input.canDesignate && viewer.status == (int)HoldemSeatStatus.Folded) throw Invalid();

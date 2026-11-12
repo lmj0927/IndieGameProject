@@ -26,10 +26,22 @@ namespace Poker.Application
         {
             if (command == null) throw new ArgumentNullException(nameof(command));
             return HostOperation(hostConnection, () =>
-                (command.CardChange != null && !RetainsDealerInput)
-                    || !HoldemDealerSourceValidation.Matches(command, session.PendingDeal, utterances?.ReadClosedDesignatedBatches())
-                    ? command.RejectCardChange()
-                    : session.ApplyDealerDeal(command));
+            {
+                var source = HoldemDealerSourceValidation.Find(command, session.PendingDeal, utterances?.ReadClosedDesignatedBatches());
+                if (command.CardChange != null && (!RetainsDealerInput || source == null)) return command.RejectCardChange();
+                long beforeVersion = session.Version;
+                var receipt = session.ApplyDealerDeal(command);
+                if (receipt.Accepted && session.Version > beforeVersion && source != null)
+                {
+                    var changed = session.ReadCurrentRevealCardChange(source.Speaker);
+                    int index = command.CardChange.BoardIndex;
+                    var revealed = session.GetSnapshot(source.Speaker).GetBoardCard(index);
+                    dealerSelections.Add(new HoldemDealerSelectionFeedback(command.HandId, command.WindowId,
+                        command.Street, source.Speaker, source.Text, changed?.DealWindowId == command.WindowId,
+                        index, revealed));
+                }
+                return receipt;
+            });
         }
 
         /// <summary>Read the current deal and its preceding raw input atomically, without consuming either.</summary>

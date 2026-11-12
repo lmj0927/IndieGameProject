@@ -151,7 +151,7 @@ namespace Poker.Application
                     game, lastAction, currentActions.ToArray(), ReadUtterances(connection), rules, ReadHistory(game),
                     ReadPublicRemarks(game), session.MatchNumber, SupportsRematch(),
                     session.ReadCurrentRevealCardChange(member.Seat), session.ReadOwnHandCardChanges(member.Seat),
-                    progressClock?.Matches(game) == true ? progressClock : null, ReadEliminatedSpeech(connection), ReadChat(), CurrentTurnAccusation(game));
+                    progressClock?.Matches(game) == true ? progressClock : null, ReadEliminatedSpeech(connection), ReadChat(), CurrentTurnAccusation(game), ReadDealerSelections(member.Seat, game));
             }
         }
 
