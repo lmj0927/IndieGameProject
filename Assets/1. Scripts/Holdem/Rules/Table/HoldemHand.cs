@@ -14,6 +14,7 @@ namespace Poker.Foundation
         private readonly HoldemOddChipRule oddChipRule;
         private readonly SeatId[] pendingSeats;
         private readonly HoldemEvaluatedHand[] pendingHands;
+        private readonly int[] revealCounts;
 
         private HoldemHand(Guid handId, long version, HoldemConfig config,
             SeatId[] ownedSeats, Card[][] ownedHoleCards, SeatId[] ownedFoldedSeats,
@@ -22,7 +23,7 @@ namespace Poker.Foundation
             BettingRound betting, HoldemOddChipRule oddChipRule,
             HoldemSettlement result, SeatId[] ownedPendingSeats,
             HoldemEvaluatedHand[] ownedPendingHands, bool isRevealPending = false, bool isDealPending = false,
-            long contributionLimit = 0, bool isFinalConversationPending = false)
+            long contributionLimit = 0, bool isFinalConversationPending = false, int[] revealCounts = null)
         {
             HandId = handId;
             Version = version;
@@ -45,6 +46,7 @@ namespace Poker.Foundation
             IsDealPending = isDealPending;
             IsFinalConversationPending = isFinalConversationPending;
             ContributionLimit = contributionLimit;
+            this.revealCounts = revealCounts;
         }
 
         public Guid HandId { get; }
@@ -64,7 +66,11 @@ namespace Poker.Foundation
         public bool IsRevealPending { get; }
         public bool IsDealPending { get; }
         public bool IsFinalConversationPending { get; }
-        public HoldemStreet? PendingDealStreet => IsDealPending ? (HoldemStreet)((int)Street + 1) : (HoldemStreet?)null;
+        public HoldemStreet? PendingDealStreet => IsDealPending ? NextDealStreet() : (HoldemStreet?)null;
+        internal int PendingRevealCount => revealCounts[(int)Street];
+        internal int RemainingRunoutCount => 5 - board.Length + revealCounts.Length - (int)Street;
+        private HoldemStreet NextDealStreet() => (int)Street + 1 == revealCounts.Length
+            ? HoldemStreet.River : (HoldemStreet)((int)Street + 1);
         public SeatId? CurrentSeat => SettlementState == HoldemSettlementState.None && !IsRevealPending && !IsDealPending && !IsFinalConversationPending
             ? CurrentBetting.CurrentSeat : (SeatId?)null;
         public bool IsComplete => Result != null;
@@ -133,13 +139,19 @@ namespace Poker.Foundation
             HoldemOddChipRule oddChipRule = HoldemOddChipRule.RequireExplicitPriority)
         {
             if (random == null) throw new ArgumentNullException(nameof(random));
+            Deck shuffled = Deck.CreateShuffled(random);
+            int[][] patterns = { new[] { 2, 2, 1 }, new[] { 2, 1, 2 }, new[] { 1, 2, 2 },
+                new[] { 3, 1, 1 }, new[] { 1, 3, 1 }, new[] { 1, 1, 3 },
+                new[] { 4, 1 }, new[] { 1, 4 }, new[] { 3, 2 }, new[] { 2, 3 }, new[] { 5 } };
+            int choice = random.NextInt(patterns.Length);
+            if (choice < 0 || choice >= patterns.Length) throw new InvalidOperationException("Random source returned an invalid reveal pattern.");
             return BeginWithDeck(handId, rosterLedger, seatsInTableOrder, buttonSeat,
-                config, Deck.CreateShuffled(random), oddChipRule);
+                config, shuffled, oddChipRule, patterns[choice]);
         }
 
         internal static HoldemHand BeginWithDeck(Guid handId, ChipLedger rosterLedger,
             IReadOnlyList<SeatId> seatsInTableOrder, SeatId buttonSeat,
-            HoldemConfig config, Deck sourceDeck, HoldemOddChipRule oddChipRule)
+            HoldemConfig config, Deck sourceDeck, HoldemOddChipRule oddChipRule, int[] revealCounts = null)
         {
             ValidateRule(oddChipRule);
             SeatId[] table = ValidateAndCopyTable(handId, rosterLedger, seatsInTableOrder,
@@ -168,7 +180,8 @@ namespace Poker.Foundation
             var started = new HoldemHand(handId, 1, config, active, cards,
                 Array.Empty<SeatId>(), buttonSeat, smallBlind, bigBlind,
                 Array.Empty<Card>(), candidateDeck, HoldemStreet.Preflop, opening,
-                oddChipRule, null, null, null, contributionLimit: opening.ContributionLimit);
+                oddChipRule, null, null, null, contributionLimit: opening.ContributionLimit,
+                revealCounts: revealCounts ?? new[] { 3, 1, 1 });
             return opening.IsComplete ? started.AdvanceAfterCompletedBetting(null, 1) : started;
         }
 
@@ -413,14 +426,9 @@ namespace Poker.Foundation
 
                 nextDeck = nextDeck.Copy();
                 nextDeck.Draw(1);
-                HoldemStreet nextStreet;
-                int cardsToDeal;
-                if (completedStreet == HoldemStreet.Preflop)
-                { nextStreet = HoldemStreet.Flop; cardsToDeal = 3; }
-                else if (completedStreet == HoldemStreet.Flop)
-                { nextStreet = HoldemStreet.Turn; cardsToDeal = 1; }
-                else
-                { nextStreet = HoldemStreet.River; cardsToDeal = 1; }
+                int cardsToDeal = revealCounts[(int)completedStreet];
+                HoldemStreet nextStreet = (int)completedStreet + 1 == revealCounts.Length
+                    ? HoldemStreet.River : (HoldemStreet)((int)completedStreet + 1);
                 Card[] dealt = nextDeck.Draw(cardsToDeal);
                 var expanded = new Card[nextBoard.Length + dealt.Length];
                 Array.Copy(nextBoard, expanded, nextBoard.Length);
@@ -481,7 +489,7 @@ namespace Poker.Foundation
             => new HoldemHand(HandId, version, Config, seats, holeCards, nextFolded,
                 ButtonSeat, SmallBlindSeat, BigBlindSeat, nextBoard, nextDeck, street,
                 betting, oddChipRule, result, nextPendingSeats, nextPendingHands, isRevealPending, isDealPending,
-                ContributionLimit, isFinalConversationPending);
+                ContributionLimit, isFinalConversationPending, revealCounts);
 
         private SeatId[] LiveSeats()
         {

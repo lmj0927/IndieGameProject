@@ -175,7 +175,7 @@ namespace Poker.Application
             var state = Synchronize();
             if (state.BettingPolicy == HoldemBettingPolicy.NoLimit || current == null
                 || !state.IsDealPending || state.PendingDeal?.WindowId != dealWindowId
-                || current.Street >= HoldemStreet.River || (int)current.Street + 1 != (int)state.PendingDeal.Street) return false;
+                || current.Street >= HoldemStreet.River || current.Street != state.PendingDeal.SourceStreet) return false;
             FreezeCurrent();
             return true;
         }

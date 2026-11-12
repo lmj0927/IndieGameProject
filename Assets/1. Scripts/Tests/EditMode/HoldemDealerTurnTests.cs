@@ -12,15 +12,20 @@ namespace Poker.Foundation.Tests
         private Guid[] peers;
         private HoldemRoomAdmission[] admissions;
         private sealed class StableRandom : IRandomSource
-        { public int NextInt(int exclusiveMax) => exclusiveMax - 1; }
+        {
+            private int calls;
+            private readonly int pattern;
+            public StableRandom(int pattern = 3) { this.pattern = pattern; }
+            public int NextInt(int exclusiveMax) => ++calls % 52 == 0 ? pattern : exclusiveMax - 1;
+        }
 
-        private void Create(bool speech = true, bool manual = true, HoldemUtterancePolicy policy = null)
+        private void Create(bool speech = true, bool manual = true, HoldemUtterancePolicy policy = null, int pattern = 3)
         {
             peers = Enumerable.Range(0, 4).Select(_ => Guid.NewGuid()).ToArray();
             admissions = new HoldemRoomAdmission[4];
             room = HoldemRoom.Create(Guid.NewGuid(), peers[0], "방장", new HoldemConfig(100, 1, 2,
                 HoldemRevealPolicy.PauseAfterCommunityReveal, dealPolicy: manual ? HoldemDealPolicy.WaitForHost
-                    : HoldemDealPolicy.Automatic), new SeatId(1), new StableRandom(), out admissions[0],
+                    : HoldemDealPolicy.Automatic), new SeatId(1), new StableRandom(pattern), out admissions[0],
                 utterancePolicy: speech ? policy ?? new HoldemUtterancePolicy(128, 2, HoldemUtteranceSeats.Active) : null);
             for (int i = 1; i < 4; i++) admissions[i] = room.Join(peers[i], "참가자 " + i).Admission;
             foreach (var peer in peers) room.SetReady(peer, true);
@@ -70,6 +75,46 @@ namespace Poker.Foundation.Tests
             var s = State;
             Assert.That(room.ResumeAfterReveal(peers[0], new HoldemRevealCommand(s.SessionId, s.HandId,
                 Guid.NewGuid(), s.SessionVersion, s.Street)).Accepted, Is.True);
+        }
+
+        [TestCase(0, "2,2,1")] [TestCase(1, "2,1,2")] [TestCase(2, "1,2,2")]
+        [TestCase(3, "3,1,1")] [TestCase(4, "1,3,1")] [TestCase(5, "1,1,3")]
+        [TestCase(6, "4,1")] [TestCase(7, "1,4")] [TestCase(8, "3,2")]
+        [TestCase(9, "2,3")] [TestCase(10, "5")]
+        public void RandomRevealPatternsKeepRequestsBoundToEachDeal(int pattern, string counts)
+        {
+            Create(pattern: pattern); Start();
+            int[] expected = counts.Split(',').Select(int.Parse).ToArray();
+            int boardCount = 0;
+            for (int i = 0; i < expected.Length; i++)
+            {
+                var sourceStreet = State.Street;
+                Speak(2, "카드 요청 " + i); EndBetting();
+                var turn = Read();
+                Assert.That(turn.TargetDeal.SourceStreet, Is.EqualTo(sourceStreet));
+                Assert.That(turn.TargetDeal.BoardStart, Is.EqualTo(boardCount));
+                Assert.That(turn.TargetDeal.CardCount, Is.EqualTo(expected[i]));
+                Assert.That(turn.SourceUtterances.Street, Is.EqualTo(sourceStreet));
+                var resolver = new HoldemRequestedCardResolver(new StableRandom());
+                var policy = new ExplicitTestSelection { SelectResult = (work, batch) => resolver.Resolve(work, batch.GetEntry(0)) };
+                using (var coordinator = new HoldemDealerTurnCoordinator(CardTestPort(), policy))
+                {
+                    coordinator.Poll(out var work);
+                    Assert.That(coordinator.TryPostInterpretations(work, Interpret(work, 45 - i)), Is.True);
+                    Assert.That(coordinator.Poll(out _).Accepted, Is.True);
+                }
+                boardCount += expected[i];
+                Assert.That(State.BoardCount, Is.EqualTo(boardCount));
+                Assert.That(State.GetBoardCard(boardCount - 1).Id, Is.EqualTo(45 - i));
+                Assert.That(State.Street == HoldemStreet.River, Is.EqualTo(i == expected.Length - 1));
+                var hostPacket = HoldemRoomPacketMapper.Create(room.Read(peers[0]));
+                var guestPacket = HoldemRoomPacketMapper.Create(room.Read(peers[1]));
+                Assert.That(guestPacket.game.board, Is.EqualTo(hostPacket.game.board));
+                Assert.That(guestPacket.game.seats[0].visibleCards, Is.Empty);
+                Resume();
+            }
+            EndBetting();
+            Assert.That(State.Result, Is.Not.Null);
         }
 
         [TestCase(false)]

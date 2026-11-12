@@ -14,8 +14,8 @@ namespace Poker.Foundation
                 || Config.RevealPolicy != HoldemRevealPolicy.PauseAfterCommunityReveal
                 || !WasDealtIn(change.Speaker)
                 || (Config.BettingPolicy == HoldemBettingPolicy.SharedAnteFixed && IsFolded(change.Speaker))) return false;
-            int count = expectedStreet == HoldemStreet.Flop ? 3 : 1;
-            int remainingRunout = expectedStreet == HoldemStreet.Flop ? 8 : expectedStreet == HoldemStreet.Turn ? 4 : 2;
+            int count = PendingRevealCount;
+            int remainingRunout = RemainingRunoutCount;
             int slot = change.BoardIndex - board.Length;
             var changedDeck = deck.Copy();
             if (!changedDeck.TrySwapCommunityCard(count, remainingRunout, slot, change.Card, out before, out sourceDeckIndex)) return false;

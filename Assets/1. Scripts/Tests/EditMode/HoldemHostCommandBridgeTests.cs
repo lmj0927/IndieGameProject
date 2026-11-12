@@ -271,7 +271,8 @@ namespace Poker.Foundation.Tests
 
         private sealed class StableRandom : IRandomSource
         {
-            public int NextInt(int exclusiveMax) => exclusiveMax - 1;
+            private int calls;
+            public int NextInt(int exclusiveMax) => ++calls % 52 == 0 ? 3 : exclusiveMax - 1;
         }
     }
 }

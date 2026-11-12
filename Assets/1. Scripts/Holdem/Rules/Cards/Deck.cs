@@ -27,12 +27,12 @@ namespace Poker.Foundation
         }
 
         // Does not consume cards. The upcoming burn and other cards in this reveal
-        // are excluded: moving a card already in the flop only reorders the same board.
+        // are excluded: moving a card already in the reveal only reorders the same board.
         internal bool TrySwapCommunityCard(int revealCount, int remainingRunoutCount, int slot,
             Card replacement, out Card before, out int sourceDeckIndex)
         {
             before = default; sourceDeckIndex = -1;
-            if (!replacement.IsValid || (revealCount != 1 && revealCount != 3)
+            if (!replacement.IsValid || revealCount < 1 || revealCount > 5
                 || remainingRunoutCount < revealCount + 1 || remainingRunoutCount > RemainingCount
                 || slot < 0 || slot >= revealCount) return false;
             int target = nextIndex + 1 + slot;

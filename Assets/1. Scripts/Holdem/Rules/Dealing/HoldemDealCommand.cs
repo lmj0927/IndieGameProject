@@ -9,11 +9,17 @@ namespace Poker.Foundation
         {
             SessionId = sessionId; HandId = hand.HandId; WindowId = Guid.NewGuid();
             Street = hand.PendingDealStreet.Value;
+            SourceStreet = hand.Street;
+            BoardStart = hand.BoardCount;
+            CardCount = hand.PendingRevealCount;
         }
         public Guid SessionId { get; }
         public Guid HandId { get; }
         public Guid WindowId { get; }
         public HoldemStreet Street { get; }
+        public HoldemStreet SourceStreet { get; }
+        public int BoardStart { get; }
+        public int CardCount { get; }
     }
 
     /// <summary>Trusted host authorizes one deal. Never accept this through a player connection.</summary>

@@ -7,7 +7,7 @@ namespace Poker.Foundation
     public enum HoldemCardSourceScope { UndealtOutsideCurrentHandRunout = 1 }
     /// <summary>
     /// Host-only selected effect, not an LLM interpretation or player command. Selection,
-    /// probability and flop-slot policy belong to the caller. A request is not proof of success.
+    /// probability and reveal-slot policy belong to the caller. A request is not proof of success.
     /// </summary>
     public sealed class HoldemCardChange
     {

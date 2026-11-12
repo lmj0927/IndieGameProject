@@ -5,7 +5,7 @@ namespace Poker.Application
 {
     internal static class HoldemDealerSourceValidation
     {
-        internal static bool Matches(HoldemDealCommand command, IReadOnlyList<HoldemUtteranceBatch> batches)
+        internal static bool Matches(HoldemDealCommand command, HoldemDealWindow deal, IReadOnlyList<HoldemUtteranceBatch> batches)
         {
             var change = command.CardChange;
             if (change == null) return true;
@@ -13,7 +13,8 @@ namespace Poker.Application
             foreach (var batch in batches)
             {
                 if (batch.Audience != HoldemSpeechAudience.Table || batch.SessionId != command.SessionId || batch.HandId != command.HandId
-                    || batch.WindowId != change.UtteranceWindowId || (int)batch.Street + 1 != (int)command.Street) continue;
+                    || batch.WindowId != change.UtteranceWindowId
+                    || deal != null && deal.WindowId == command.WindowId && batch.Street != deal.SourceStreet) continue;
                 for (int i = 0; i < batch.Count; i++)
                 {
                     var entry = batch.GetEntry(i);

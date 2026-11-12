@@ -8,7 +8,7 @@ namespace Poker.Application
     /// Host-only: turns a selected partial or exact preference into one concrete community change.
     /// The host cannot read deck order, so matching cards are proposed in random order; a card the
     /// core rejects is excluded for that deal window. With no candidates left the deal is unchanged.
-    /// The flop slot is drawn at random so the changed position is not fixed.
+    /// The slot within the next reveal is drawn at random.
     /// </summary>
     public sealed class HoldemRequestedCardResolver
     {
@@ -40,7 +40,7 @@ namespace Poker.Application
             if (candidates.Count == 0) { proposed = null; return HoldemDealerSelection.Unchanged(); }
 
             var chosen = candidates[random.NextInt(candidates.Count)];
-            int slot = deal.Street == HoldemStreet.Flop ? random.NextInt(3) : deal.Street == HoldemStreet.Turn ? 3 : 4;
+            int slot = deal.BoardStart + random.NextInt(deal.CardCount);
             proposed = chosen;
             return HoldemDealerSelection.Change(selected.UtteranceId, slot, chosen,
                 HoldemCardSourceScope.UndealtOutsideCurrentHandRunout);

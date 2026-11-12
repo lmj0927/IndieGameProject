@@ -53,7 +53,7 @@ internal sealed class Play2TableHud
             slider.value = Mathf.Clamp((int)(current + packet.game.pot / 2), slider.lowValue, slider.highValue);
         };
         allIn.clicked += () => RaiseTo(packet.game.legal.allInTarget);
-        slider.RegisterValueChangedCallback(e => target.text = $"이번 스트리트 총 {e.newValue} 칩");
+        slider.RegisterValueChangedCallback(e => target.text = $"이번 베팅 총 {e.newValue} 칩");
         Find<Button>("accuse-confirm").clicked += () =>
         {
             if (suspect.index < 0 || suspect.index >= suspects.Length) return;
@@ -95,7 +95,7 @@ internal sealed class Play2TableHud
         Show(root, true);
         var game = packet.game;
         if (previous?.handId != game.handId) shownNotices.Clear();
-        street.text = StreetName((HoldemStreet)game.street);
+        street.text = game.hasResult ? "결과" : game.board.Length == 0 ? "카드 공개 전" : $"공용 카드 {game.board.Length}/5장 공개";
         pot.text = $"팟  {game.pot}";
         seats.Clear();
         foreach (var seat in game.seats)
@@ -123,7 +123,7 @@ internal sealed class Play2TableHud
             slider.lowValue = min;
             slider.highValue = (int)Math.Max(min, legal.maximumTarget);
             slider.SetValueWithoutNotify(min);
-            target.text = $"이번 스트리트 총 {min} 칩";
+            target.text = $"이번 베팅 총 {min} 칩";
         }
         allIn.SetEnabled(acting && legal.hasAllInTarget);
         accuse.SetEnabled(acting && game.canAccuseOnTurn);
@@ -191,9 +191,4 @@ internal sealed class Play2TableHud
 
     private string Name(int seat) => packet.members.FirstOrDefault(member => member.seat == seat)?.name ?? $"{seat}번";
     private static void Show(VisualElement element, bool visible) => element.EnableInClassList("hidden", !visible);
-    private static string StreetName(HoldemStreet street) => street switch
-    {
-        HoldemStreet.Preflop => "프리플랍", HoldemStreet.Flop => "플랍", HoldemStreet.Turn => "턴",
-        HoldemStreet.River => "리버", _ => "결과"
-    };
 }

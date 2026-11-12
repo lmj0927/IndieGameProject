@@ -176,7 +176,7 @@ namespace Poker.Application
             if (frozen.InputKind != HoldemDealerInputKind.ClosedBettingWindow || source == null || deal == null
                 || source.Audience != HoldemSpeechAudience.Table || source.SessionId != deal.SessionId
                 || source.HandId != deal.HandId || source.WindowId == Guid.Empty || source.WindowId == deal.WindowId
-                || (int)source.Street + 1 != (int)deal.Street)
+                || source.Street != deal.SourceStreet)
                 throw new ArgumentException("A frozen Table input and its next deal are required.", nameof(frozen));
 
             var byMessage = new Dictionary<Guid, DealerFeatureOutcome>();

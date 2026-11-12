@@ -27,7 +27,7 @@ namespace Poker.Application
             if (command == null) throw new ArgumentNullException(nameof(command));
             return HostOperation(hostConnection, () =>
                 (command.CardChange != null && !RetainsDealerInput)
-                    || !HoldemDealerSourceValidation.Matches(command, utterances?.ReadClosedDesignatedBatches())
+                    || !HoldemDealerSourceValidation.Matches(command, session.PendingDeal, utterances?.ReadClosedDesignatedBatches())
                     ? command.RejectCardChange()
                     : session.ApplyDealerDeal(command));
         }
@@ -49,7 +49,7 @@ namespace Poker.Application
                 if (RetainsDealerInput && utterances != null)
                     foreach (var batch in utterances.ReadClosedDesignatedBatches())
                         if (batch.SessionId == deal.SessionId && batch.HandId == deal.HandId
-                            && (int)batch.Street + 1 == (int)deal.Street) matching = batch;
+                            && batch.Street == deal.SourceStreet) matching = batch;
                 if (snapshot.BettingPolicy != HoldemBettingPolicy.NoLimit && RetainsDealerInput && matching == null)
                     return new HoldemDealerTurnRead(HoldemRoomError.None);
                 return new HoldemDealerTurnRead(HoldemRoomError.None,
