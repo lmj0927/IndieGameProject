@@ -199,6 +199,7 @@ namespace Poker.Application
             if (utteranceHandId != session.CurrentHandId.Value)
             {
                 utteranceHandId = session.CurrentHandId.Value; lastUtteranceOrdinal = 0;
+                dealerSelections.Clear();
                 publicRemarks.Clear();
                 Array.Clear(designationRevisions, 0, designationRevisions.Length);
                 capturedUtteranceWindows.Clear();

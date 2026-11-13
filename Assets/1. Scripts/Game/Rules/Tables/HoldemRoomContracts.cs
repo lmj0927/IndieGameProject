@@ -240,6 +240,7 @@ namespace Poker.Application
         private readonly HoldemRoomMemberView[] members;
         private readonly HoldemActionNotice[] streetActions;
         private readonly HoldemOwnCardChange[] ownHandCardChanges;
+        private readonly HoldemDealerSelectionFeedback[] dealerSelections;
         internal HoldemRoomView(Guid sessionId, long revision, SeatId viewer, bool paused,
             HoldemRoomMemberView[] ownedMembers, HoldemSnapshot game, HoldemActionNotice lastAction,
             HoldemActionNotice[] ownedStreetActions, HoldemUtteranceView ownUtterances = null, HoldemRoomRules rules = null,
@@ -247,12 +248,15 @@ namespace Poker.Application
             long matchNumber = 1, bool rematchSupported = false, HoldemOwnCardChange ownCardChange = null,
             System.Collections.Generic.IReadOnlyList<HoldemOwnCardChange> ownHandCardChanges = null,
             HoldemProgressClock progressClock = null, HoldemEliminatedSpeechView eliminatedSpeech = null,
-            HoldemChatLog chat = null, HoldemTurnAccusationNotice turnAccusation = null)
+            HoldemChatLog chat = null, HoldemTurnAccusationNotice turnAccusation = null,
+            HoldemDealerSelectionFeedback[] dealerSelections = null)
         { SessionId = sessionId; Revision = revision; ViewerSeat = viewer; Paused = paused;
             members = ownedMembers; Game = game; LastAction = lastAction; streetActions = ownedStreetActions;
             OwnUtterances = ownUtterances; Rules = rules; History = history; PublicUtterances = publicUtterances;
             MatchNumber = matchNumber; RematchSupported = rematchSupported; OwnCardChange = ownCardChange; ProgressClock = progressClock;
             EliminatedSpeech = eliminatedSpeech; Chat = chat; TurnAccusation = turnAccusation;
+            this.dealerSelections = dealerSelections == null ? Array.Empty<HoldemDealerSelectionFeedback>()
+                : (HoldemDealerSelectionFeedback[])dealerSelections.Clone();
             this.ownHandCardChanges = new HoldemOwnCardChange[ownHandCardChanges?.Count ?? 0];
             for (int i = 0; i < this.ownHandCardChanges.Length; i++) this.ownHandCardChanges[i] = ownHandCardChanges[i]; }
         public Guid SessionId { get; }
@@ -266,6 +270,8 @@ namespace Poker.Application
         public HoldemEliminatedSpeechView EliminatedSpeech { get; }
         public HoldemChatLog Chat { get; }
         public HoldemTurnAccusationNotice TurnAccusation { get; }
+        public int DealerSelectionCount => dealerSelections.Length;
+        public HoldemDealerSelectionFeedback GetDealerSelection(int index) => dealerSelections[index];
         public HoldemOwnCardChange OwnCardChange { get; }
         public int OwnHandCardChangeCount => ownHandCardChanges.Length;
         public HoldemOwnCardChange GetOwnHandCardChange(int index) => ownHandCardChanges[index];

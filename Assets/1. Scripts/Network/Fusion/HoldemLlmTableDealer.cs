@@ -31,9 +31,10 @@ namespace Poker.Online
             => new HoldemConfig(stack, small, big, HoldemRevealPolicy.PauseAfterCommunityReveal,
                 HoldemAccusationMode.Disabled, HoldemDealPolicy.WaitForHost, turnAccusations: true);
 
-        // Dealer requests are private: OwnOnly keeps them out of every other player's projection.
+        // Chat text stays public; OwnOnly hides which lines were designated for the dealer.
         public static HoldemUtterancePolicy CreateUtterancePolicy(int maximumLength = HoldemRoom.MaximumChatTextLength)
-            => new HoldemUtterancePolicy(maximumLength, 1, HoldemUtteranceSeats.Active | HoldemUtteranceSeats.AllIn,
+            => new HoldemUtterancePolicy(maximumLength, 1, HoldemUtteranceSeats.Active | HoldemUtteranceSeats.AllIn
+                | HoldemUtteranceSeats.Folded | HoldemUtteranceSeats.Busted,
                 HoldemUtteranceVisibility.OwnOnly, HoldemUtteranceBatchRetention.UntilHostAcknowledges);
 
         public HoldemLlmTableDealer(IHoldemSocialHostPort host, IMentAnalyzer analyzer)

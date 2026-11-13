@@ -4,7 +4,7 @@ using Poker.Foundation;
 namespace Poker.Application
 {
     [Flags]
-    public enum HoldemUtteranceSeats { None = 0, Active = 1, AllIn = 2, Folded = 4 }
+    public enum HoldemUtteranceSeats { None = 0, Active = 1, AllIn = 2, Folded = 4, Busted = 8 }
 
     public enum HoldemUtteranceVisibility { OwnOnly = 0, PublicRaw = 1 }
     public enum HoldemUtteranceBatchRetention { UntilHostAcknowledges = 0, None = 1 }
@@ -21,7 +21,7 @@ namespace Poker.Application
                 throw new ArgumentOutOfRangeException(nameof(maximumTextLength));
             if (maximumPerSeatPerStreet < 1 || maximumPerSeatPerStreet > 32)
                 throw new ArgumentOutOfRangeException(nameof(maximumPerSeatPerStreet));
-            if ((allowedSeats & ~(HoldemUtteranceSeats.Active | HoldemUtteranceSeats.AllIn | HoldemUtteranceSeats.Folded)) != 0)
+            if ((allowedSeats & ~(HoldemUtteranceSeats.Active | HoldemUtteranceSeats.AllIn | HoldemUtteranceSeats.Folded | HoldemUtteranceSeats.Busted)) != 0)
                 throw new ArgumentOutOfRangeException(nameof(allowedSeats));
             if (!Enum.IsDefined(typeof(HoldemUtteranceVisibility), visibility))
                 throw new ArgumentOutOfRangeException(nameof(visibility));
@@ -50,10 +50,11 @@ namespace Poker.Application
         }
         internal bool Allows(HoldemSeatView seat)
         {
-            if (!seat.WasDealtIn) return false;
+            if (!seat.WasDealtIn && seat.Status != HoldemSeatStatus.Busted) return false;
             var flag = seat.Status == HoldemSeatStatus.Active ? HoldemUtteranceSeats.Active
                 : seat.Status == HoldemSeatStatus.AllIn ? HoldemUtteranceSeats.AllIn
-                : seat.Status == HoldemSeatStatus.Folded ? HoldemUtteranceSeats.Folded : HoldemUtteranceSeats.None;
+                : seat.Status == HoldemSeatStatus.Folded ? HoldemUtteranceSeats.Folded
+                : seat.Status == HoldemSeatStatus.Busted ? HoldemUtteranceSeats.Busted : HoldemUtteranceSeats.None;
             return flag != HoldemUtteranceSeats.None && (AllowedSeats & flag) != 0;
         }
     }

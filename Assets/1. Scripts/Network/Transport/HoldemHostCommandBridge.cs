@@ -28,6 +28,7 @@ namespace Poker.Transport
         private readonly HoldemAccusationMode accusationMode;
         private readonly bool sequentialPacingEnabled;
         private readonly bool actionTurnPacingEnabled;
+        private readonly bool spectatorDealerRequestsEnabled;
         private readonly Dictionary<Guid, Binding> bindings = new Dictionary<Guid, Binding>();
         private readonly Dictionary<string, Admission> admissions = new Dictionary<string, Admission>();
         private bool disposed;
@@ -73,6 +74,8 @@ namespace Poker.Transport
             anteProgressionEnabled = hostView.Rules.CopyAnteSteps().Length > 0;
             accusationMode = hostView.Rules.AccusationMode;
             sequentialPacingEnabled = hostView.Rules.SequentialPacing != null;
+            spectatorDealerRequestsEnabled = config.BettingPolicy == HoldemBettingPolicy.NoLimit
+                && utterancePolicy != null && (utterancePolicy.AllowedSeats & HoldemUtteranceSeats.Busted) != 0;
             actionTurnPacingEnabled = hostView.Rules.SequentialPacing?.Origin == SequentialConversationClockOrigin.ActionTurn;
             room.Disconnect(reservedHost);
             hostKeyHash = KeyHash(hostIdentity.AdmissionKey);
@@ -106,8 +109,11 @@ namespace Poker.Transport
             long ownEntryBytes = 360 + 6L * policy.MaximumTextLength;
             long publicEntryBytes = 160 + 6L * policy.MaximumTextLength;
             long historyBytes = checked(512 + allowances * policy.MaximumPerSeatPerStreet * (ownEntryBytes + publicCopies * publicEntryBytes));
+            // At settlement all three selected source sentences share this frame with history.
+            long selectionBytes = policy.BatchRetention == HoldemUtteranceBatchRetention.UntilHostAcknowledges
+                ? 3 * (256 + 6L * policy.MaximumTextLength) : 0;
             // Leave the existing 24 KiB reserve for cards, results and response metadata unchanged.
-            if (historyBytes > HoldemFrameCodec.MaximumBytes - 24 * 1024)
+            if (historyBytes + selectionBytes > HoldemFrameCodec.MaximumBytes - 24 * 1024)
                 throw new ArgumentException("Speech history exceeds this transport's bounded frame capacity.", nameof(policy));
         }
 
@@ -415,6 +421,8 @@ namespace Poker.Transport
                 return Error(request.id, "ClientUpgradeRequired");
             if (turnAccusationEnabled && (!request.supportsTurnAccusation || !request.supportsSpeechPages
                 || !request.supportsEliminatedSpeechPages))
+                return Error(request.id, "ClientUpgradeRequired");
+            if (spectatorDealerRequestsEnabled && !request.supportsSpectatorDealerRequests)
                 return Error(request.id, "ClientUpgradeRequired");
             if (anteProgressionEnabled && !request.supportsAnteProgression)
                 return Error(request.id, "ClientUpgradeRequired");

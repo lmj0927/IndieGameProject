@@ -33,6 +33,7 @@ namespace Poker.Transport
         public string eliminatedSpeechHandId;
         public int eliminatedSpeechCursor;
         public bool supportsAnteProgression;
+        public bool supportsSpectatorDealerRequests;
         // A player's edit order and choice, never a claimed seat or adjudication result.
         public long choiceRevision;
         public int fixedPhase, fixedChoice;
@@ -92,6 +93,7 @@ namespace Poker.Transport
             supportsTwoPlayerRooms = true,
             supportsPublicUtterances = true, supportsMessageDesignation = true, supportsRematch = true,
             supportsAccusations = true, supportsFixedBetting = true, supportsAnteProgression = true,
+            supportsSpectatorDealerRequests = true,
             supportsTurnAccusation = true, supportsSpeechPages = true, supportsEliminatedSpeechPages = true,
             supportsSequentialPacing = true, supportsActionTurnPacing = true
         };
