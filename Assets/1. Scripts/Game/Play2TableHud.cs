@@ -32,10 +32,7 @@ internal sealed partial class Play2TableHud
     private readonly CanvasGroup[] actionOpacity = new CanvasGroup[4];
     private readonly TextMeshProUGUI[] actionLabels = new TextMeshProUGUI[4];
     private readonly Play2HandGuide handGuide;
-    private bool acting, canReserve;
-    private enum Reservation { None, CheckOrFold, CheckOrCall }
-    private Reservation reservation;
-    private long quotedCall, reservedCall;
+    private bool acting;
     private readonly CanvasGroup baseActions;
     private TextMeshProUGUI betCommit;
     private readonly int[] potPercents = { 33, 50, 100, 200 };
@@ -173,8 +170,7 @@ internal sealed partial class Play2TableHud
         if (value?.hasGame != true)
         {
             packet = null;
-            acting = canReserve = false;
-            reservation = Reservation.None;
+            acting = false;
             noticeKey = null;
             notice.transform.parent.gameObject.SetActive(false);
             shownNotices.Clear();
@@ -304,22 +300,14 @@ internal sealed partial class Play2TableHud
             table.PlayResultSound();
             announceSettlement = false;
         }
-        var legal = game.legal;
         bool settlement = game.settlementState == (int)HoldemSettlementState.AwaitingOddChipPriority;
         bool bettingRound = !game.hasResult && !settlement;
         controls.gameObject.SetActive(bettingRound);
-        var playingSeat = game.seats.FirstOrDefault(seat => seat.seat == packet.viewerSeat);
-        bool showActions = bettingRound && playingSeat?.dealtIn == true && playingSeat.status == (int)HoldemSeatStatus.Active;
         bool sameWindow = previous?.handId == game.handId && previous.street == game.street
             && previousPacket.viewerSeat == packet.viewerSeat && previousPacket.sessionId == packet.sessionId;
-        canReserve = showActions && !packet.paused && !game.dealPending && !game.revealPending && !dealing
-            && !actionPending && game.currentSeat > 0 && game.currentSeat != packet.viewerSeat;
-        quotedCall = showActions ? acting ? legal.callAmount : VisibleCall(game, playingSeat) : 0;
-        if (!sameWindow || !(canReserve || acting) || reservation == Reservation.CheckOrCall && quotedCall > reservedCall)
-            reservation = Reservation.None;
         if (!acting || !sameWindow || previous.currentSeat != game.currentSeat)
             CloseActionPanels();
-        DrawActions(showActions);
+        DrawActions();
         if (acting && game.canAccuseOnTurn && (previous?.version != game.version || suspects.Length == 0))
         {
             suspects = game.seats.Where(s => s.dealtIn && s.seat != packet.viewerSeat && s.status != (int)HoldemSeatStatus.Folded).Select(s => s.seat).ToArray();
@@ -336,14 +324,6 @@ internal sealed partial class Play2TableHud
             : acting ? "내 차례" : $"{Name(game.currentSeat)} 차례";
         turn.color = acting ? Play2UGui.Gold : Play2UGui.Cream;
         turnMark.color = acting ? Play2UGui.Hex("E9CC8C") : Color.clear;
-        if (acting && reservation != Reservation.None)
-        {
-            var intent = reservation;
-            reservation = Reservation.None;
-            if (legal.check) Act(BettingActionKind.Check);
-            else if (intent == Reservation.CheckOrCall && legal.call && legal.callAmount <= reservedCall) Act(BettingActionKind.Call);
-            else if (intent == Reservation.CheckOrFold && legal.fold) Act(BettingActionKind.Fold);
-        }
         // A restored hand already has its public verdict in the recap.
         if (verdictKey != null && previous?.handId != game.handId) shownNotices.Add(verdictKey);
         if (verdictKey != null)
@@ -445,12 +425,6 @@ internal sealed partial class Play2TableHud
             return;
         }
         if (keyboard.hKey.wasPressedThisFrame && !selecting) handGuide.Toggle();
-        if (canReserve)
-        {
-            if (keyboard.fKey.wasPressedThisFrame) PerformAction(0);
-            else if (keyboard.eKey.wasPressedThisFrame) PerformAction(1);
-            return;
-        }
         if (!acting) return;
 
         if (sizing.gameObject.activeSelf)
@@ -472,17 +446,8 @@ internal sealed partial class Play2TableHud
 
     private void PerformAction(int index)
     {
-        if (table.ActionPending || settings.IsOpen || handGuide.IsOpen || !actionOpacity[index].interactable
-            || !baseActions.interactable) return;
-        if (canReserve && index < 2)
-        {
-            var choice = index == 0 ? Reservation.CheckOrFold : Reservation.CheckOrCall;
-            reservation = reservation == choice ? Reservation.None : choice;
-            reservedCall = quotedCall;
-            DrawActions(true);
-            return;
-        }
-        if (!acting) return;
+        if (!acting || table.ActionPending || settings.IsOpen || handGuide.IsOpen
+            || !actionOpacity[index].interactable || !baseActions.interactable) return;
         if (index == 0) Act(BettingActionKind.Fold);
         else if (index == 1) Act(packet.game.legal.check ? BettingActionKind.Check : BettingActionKind.Call);
         else if (index == 2)
@@ -499,41 +464,24 @@ internal sealed partial class Play2TableHud
         }
     }
 
-    private static long VisibleCall(HoldemGamePacket game, HoldemSeatPacket self)
+    private void DrawActions()
     {
-        bool activeOpponent = game.seats.Any(s => s.seat != self.seat && s.dealtIn && s.status == (int)HoldemSeatStatus.Active && s.stack > 0);
-        long highest = game.seats.Where(s => s.dealtIn && (activeOpponent || s.status != (int)HoldemSeatStatus.Folded))
-            .Max(s => s.streetContribution);
-        return Math.Min(self.stack, Math.Max(0, highest - self.streetContribution));
-    }
+        foreach (var row in actionRows) row.gameObject.SetActive(acting);
+        if (!acting) return;
 
-    private void DrawActions(bool show)
-    {
         var legal = packet.game.legal;
-        string call = quotedCall > 0 ? $"콜 {quotedCall}칩" : "체크";
-        SetAction(0, canReserve ? "체크 / 폴드" : "폴드", show, canReserve || acting && legal.fold);
-        SetAction(1, call, show, canReserve || acting && (legal.check || legal.call));
-        if (canReserve)
-        {
-            for (int i = 0; i < 2; i++)
-            {
-                bool selected = i == 0 ? reservation == Reservation.CheckOrFold : reservation == Reservation.CheckOrCall;
-                if (selected) actionRows[i].color = Play2UGui.Hex("356560");
-                actionLabels[i].text = (selected ? "예약됨" : "예약") + "\n" + actionLabels[i].text;
-                actionLabels[i].fontSize = 16;
-            }
-        }
-        else { actionLabels[0].fontSize = 19; actionLabels[1].fontSize = 19; }
+        string call = legal.callAmount > 0 ? $"콜 {legal.callAmount}칩" : "체크";
+        SetAction(0, "폴드", legal.fold);
+        SetAction(1, call, legal.check || legal.call);
         bool opening = packet.game.seats.All(s => s.streetContribution == 0);
-        SetAction(2, acting && !legal.bet && !legal.raise && legal.hasAllInTarget ? "올인" : opening ? "베팅" : "레이즈",
-            show, acting && (legal.bet || legal.raise || legal.hasAllInTarget));
-        SetAction(3, "고발", show, acting && packet.game.canAccuseOnTurn);
+        SetAction(2, !legal.bet && !legal.raise && legal.hasAllInTarget ? "올인" : opening ? "베팅" : "레이즈",
+            legal.bet || legal.raise || legal.hasAllInTarget);
+        SetAction(3, "고발", packet.game.canAccuseOnTurn);
     }
 
-    private void SetAction(int index, string label, bool visible, bool enabled)
+    private void SetAction(int index, string label, bool enabled)
     {
-        actionRows[index].GetComponent<Play2ActionButton>().Intent = $"{packet.game.handId}:{packet.game.street}:{canReserve}:{label}";
-        actionRows[index].gameObject.SetActive(visible);
+        actionRows[index].GetComponent<Play2ActionButton>().Intent = $"{packet.game.handId}:{packet.game.street}:{packet.game.version}:{label}";
         actionOpacity[index].interactable = enabled;
         Play2HudArt.Apply(actionRows[index], enabled && index == 2 ? "GoldButton" : "PlayingAction");
         if (!enabled) actionRows[index].color = Play2UGui.Hex("1A282BFF");
