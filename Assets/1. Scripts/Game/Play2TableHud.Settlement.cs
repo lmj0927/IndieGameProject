@@ -23,13 +23,18 @@ internal sealed partial class Play2TableHud
         private const string NoAccusation = "이번 판에는 고발이 없었어요";
         private string handId;
         private bool viewingTable;
-        private bool hadResult;
+        private bool hadResult, hadOddChips;
+        private const float PracticeReadSeconds = 4f;
+        private float practiceSeconds;
+        private bool autoAdvance, reviewHeld, offerSpectating;
+        private string practiceAction;
+        private int shownSeconds;
 
         internal SettlementCard(RectTransform parent, TMP_FontAsset font, UnityEngine.Events.UnityAction advance,
-            UnityEngine.Events.UnityAction ready)
+            UnityEngine.Events.UnityAction ready, UnityEngine.Events.UnityAction spectate)
         {
             this.font = font;
-            card = Play2HudArt.Plate("Settlement Card", parent, new Vector2(168, 0), new Vector2(800, 632), "PinePanel", true);
+            card = Play2HudArt.Plate("Settlement Card", parent, Vector2.zero, new Vector2(800, 632), "PinePanel", true);
             card.GetComponent<Image>().color = Play2UGui.Hex("152124FF");
             heading = Label("Result Type", card, new Vector2(-230, 283), new Vector2(290, 24), 15, Play2UGui.Gold);
             title = Label("Winners", card, new Vector2(-80, 249), new Vector2(590, 45), 30, Play2UGui.Cream);
@@ -51,7 +56,7 @@ internal sealed partial class Play2TableHud
             tableNoAccusation.text = NoAccusation;
             tableFooter.gameObject.SetActive(false);
             review = Play2HudArt.Button("Review Settlement", tableFooter, "결과 자세히", Vector2.zero, new Vector2(132, 41),
-                "ActionRow", Play2UGui.Cream, font, () => SetTableView(false), 17);
+                "ActionRow", Play2UGui.Cream, font, () => { reviewHeld = true; nextLabel.text = practiceAction; SetTableView(false); }, 17);
             var reviewRect = (RectTransform)review.transform;
             reviewRect.anchorMin = reviewRect.anchorMax = Vector2.right;
             review.gameObject.SetActive(false);
@@ -113,11 +118,21 @@ internal sealed partial class Play2TableHud
             nextRect.anchorMin = nextRect.anchorMax = new Vector2(.5f, 0);
             nextRect.anchoredPosition = new Vector2(294, 39);
             rematchReady = Play2HudArt.Button("Rematch Ready", card, "재경기 준비", Vector2.zero, new Vector2(162, 43),
-                "ActionRow", Play2UGui.Cream, font, ready, 18);
+                "ActionRow", Play2UGui.Cream, font, () => { if (offerSpectating) spectate(); else ready(); }, 18);
             var readyRect = (RectTransform)rematchReady.transform;
             readyRect.anchorMin = readyRect.anchorMax = new Vector2(.5f, 0);
             readyRect.anchoredPosition = new Vector2(-294, 39);
             rematchLabel = rematchReady.GetComponentInChildren<TextMeshProUGUI>();
+            foreach (var button in new[] { review, next, rematchReady })
+            {
+                var label = button.GetComponentInChildren<TextMeshProUGUI>(true);
+                var rect = label.rectTransform;
+                rect.anchorMin = Vector2.zero;
+                rect.anchorMax = Vector2.one;
+                rect.offsetMin = new Vector2(5, 2);
+                rect.offsetMax = new Vector2(-5, -2);
+                Play2HudArt.Fit(label, 13);
+            }
             rematchStatus = Label("Rematch Status", card, Vector2.zero, new Vector2(380, 38), 15, Play2UGui.Cream);
             rematchStatus.rectTransform.anchorMin = rematchStatus.rectTransform.anchorMax = new Vector2(.5f, 0);
             rematchStatus.rectTransform.anchoredPosition = new Vector2(0, 39);
@@ -193,30 +208,45 @@ internal sealed partial class Play2TableHud
         {
             card.gameObject.SetActive(false);
             tableFooter.gameObject.SetActive(false);
-            viewingTable = false;
         }
 
-        internal void Present(HoldemRoomPacket packet, bool oddChips, bool isHost, bool pending, Func<int, string> name)
+        internal void Present(HoldemRoomPacket packet, bool oddChips, bool isHost, bool practice, bool watching, bool pending, Func<int, string> name)
         {
             var game = packet.game;
             if (!game.hasResult && !oddChips) { Hide(); return; }
             bool newHand = handId != game.handId;
-            if (newHand || game.hasResult && !hadResult)
-                viewingTable = game.hasResult && game.result?.kind == (int)HoldemResultKind.Showdown;
+            var own = practice ? Array.Find(game.seats, seat => seat.seat == packet.viewerSeat) : null;
+            bool busted = game.hasResult && own != null && own.stack == 0;
+            bool newPractice = busted && (!watching || game.isOver);
+            offerSpectating = newPractice && game.canContinue;
+            bool folded = own != null && own.status == (int)HoldemSeatStatus.Folded;
+            bool continueFold = folded && game.hasResult && game.canContinue;
+            bool continueSpectating = busted && watching && game.canContinue;
+            bool automatic = practice && (oddChips || continueFold || continueSpectating || newPractice && !watching);
+            if (newHand || game.hasResult && !hadResult || oddChips && !hadOddChips)
+            {
+                viewingTable = game.hasResult && (automatic || game.result?.kind == (int)HoldemResultKind.Showdown);
+                autoAdvance = automatic;
+                reviewHeld = false;
+                practiceSeconds = PracticeReadSeconds;
+            }
             handId = game.handId;
             hadResult = game.hasResult;
-            bool rematch = game.isOver && packet.hasRematch && packet.rematchSupported;
+            hadOddChips = oddChips;
+            bool rematch = !busted && game.isOver && packet.hasRematch && packet.rematchSupported;
             var participants = packet.members ?? Array.Empty<HoldemRoomMemberPacket>();
             bool allReady = participants.Length > 0 && participants.All(member => member.connected && member.rematchReady);
             bool ownReady = participants.Any(member => member.seat == packet.viewerSeat && member.rematchReady);
-            next.gameObject.SetActive(isHost && (oddChips || game.canContinue || rematch));
+            next.gameObject.SetActive(isHost && (oddChips || game.canContinue || rematch || busted));
             next.interactable = !packet.paused && !pending && (!rematch || allReady);
-            nextLabel.text = pending ? "처리 중" : oddChips ? "정산하기" : rematch ? "다시 시작" : "다음 판";
-            rematchReady.gameObject.SetActive(rematch);
+            practiceAction = oddChips ? "정산하기" : newPractice ? "새 연습" : rematch ? "다시 시작" : "다음 판";
+            nextLabel.text = pending ? "처리 중" : practiceAction;
+            shownSeconds = -1;
+            rematchReady.gameObject.SetActive(rematch || offerSpectating);
             rematchReady.interactable = !packet.paused && !pending;
-            rematchLabel.text = ownReady ? "준비 취소" : "재경기 준비";
+            rematchLabel.text = offerSpectating ? "계속 관전" : ownReady ? "준비 취소" : "재경기 준비";
             bool waitingForHost = !isHost && !game.isOver && !oddChips && game.canContinue;
-            rematchStatus.gameObject.SetActive(game.isOver || waitingForHost);
+            rematchStatus.gameObject.SetActive(!busted && game.isOver || waitingForHost);
             rematchStatus.text = waitingForHost ? "방장이 다음 판을 시작하면 이어집니다."
                 : rematch ? "재경기 준비 " + participants.Count(member => member.connected && member.rematchReady) + "/" + participants.Length
                 : "방을 나가 새 경기를 시작할 수 있습니다.";
@@ -274,6 +304,21 @@ internal sealed partial class Play2TableHud
             content.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, y + 4);
             card.SetSizeWithCurrentAnchors(RectTransform.Axis.Vertical, Mathf.Clamp(y + 214, 350, 632));
             if (newHand) scroll.verticalNormalizedPosition = 1;
+        }
+
+        internal void TickPractice(bool halt, Action advance)
+        {
+            if (!autoAdvance || reviewHeld || !next.isActiveAndEnabled || !next.interactable) return;
+            if (!halt) practiceSeconds -= Mathf.Min(Time.unscaledDeltaTime, .25f);
+            int seconds = Mathf.Max(0, Mathf.CeilToInt(practiceSeconds));
+            if (seconds != shownSeconds)
+            {
+                shownSeconds = seconds;
+                nextLabel.text = $"{seconds}초 후 {practiceAction}";
+            }
+            if (practiceSeconds > 0f) return;
+            autoAdvance = false;
+            advance();
         }
 
         private static string AccusationRecap(HoldemRoomPacket packet, Func<int, string> name)

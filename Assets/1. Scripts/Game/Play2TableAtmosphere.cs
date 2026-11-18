@@ -44,7 +44,7 @@ internal sealed class Play2TableAtmosphere : MonoBehaviour
         string[] environmentRoots = { "Terrain", "Buildings", "Sky", "Rocks", "Path", "Vegetation", "Props", "Exterior" };
         surroundings = FindObjectsByType<Renderer>(FindObjectsSortMode.None)
             .Where(renderer => environmentRoots.Contains(renderer.transform.root.name)
-                && renderer.name != "table" && !renderer.name.StartsWith("BOX")) .ToArray();
+                && renderer.name != "table" && !renderer.name.StartsWith("Table Chair ", System.StringComparison.Ordinal)).ToArray();
         surroundingsVisible = surroundings.Select(renderer => renderer.enabled).ToArray();
         room = Instantiate(Resources.Load<GameObject>("TablePresentation/QuietRoom"), table.position, Quaternion.identity, transform);
         var key = AddLight("Table overhead", table.position + Vector3.up * 2.01f, LightType.Spot, 3.6f, 6);
@@ -115,7 +115,7 @@ internal sealed class Play2TableAtmosphere : MonoBehaviour
         return light;
     }
 
-    internal void Present(HoldemRoomPacket packet, Play2TablePreview.ShowdownBeat beat, int[] highlighted)
+    internal void Present(HoldemRoomPacket packet, Play2TablePreview.ShowdownBeat beat, int revealingSeat, int[] highlighted)
     {
         var game = packet?.game;
         bool reveal = beat == Play2TablePreview.ShowdownBeat.Reveal;
@@ -130,9 +130,9 @@ internal sealed class Play2TableAtmosphere : MonoBehaviour
             bool outOfGame = seat?.status == (int)HoldemSeatStatus.Busted;
             targetShade[i] = outOfGame ? .40f : folded ? .60f : 1f;
             bool livePair = remaining == 2 && seat?.dealtIn == true && !folded && !outOfGame && game?.hasResult == false;
-            bool showing = seat != null && Play2SettlementSummary.IsPublicHand(seat);
+            bool openingHand = i + 1 == revealingSeat;
             bool focus = beat == Play2TablePreview.ShowdownBeat.Finished || System.Array.IndexOf(highlighted, i + 1) >= 0;
-            seatIntensity[i] = award && seat?.awarded > 0 ? (focus ? 3.15f : 1.2f) : reveal && showing ? 1.95f : livePair ? 1.5f : 0f;
+            seatIntensity[i] = award && seat?.awarded > 0 ? (focus ? 2.35f : 1.2f) : reveal && openingHand ? 1.8f : livePair ? 1.5f : 0f;
         }
     }
 

@@ -2,6 +2,19 @@ using UnityEngine;
 
 internal static class Play2TableArm
 {
+    // Aim the upper arm back towards the player's body without stretching either bone.
+    internal static void AnchorViewSleeve(Transform shoulder, Transform elbow, Transform view, bool left)
+    {
+        Vector3 joint = elbow.position;
+        Quaternion orientation = elbow.rotation;
+        Vector3 bone = joint - shoulder.position;
+        Vector3 shoulderHint = view.TransformPoint(new Vector3(left ? -.31f : .31f, -.42f, .20f));
+        Vector3 direction = (joint - shoulderHint).normalized;
+        shoulder.rotation = Quaternion.FromToRotation(bone, direction) * shoulder.rotation;
+        shoulder.position += joint - elbow.position;
+        elbow.rotation = orientation;
+    }
+
     internal static void Reach(Transform upperArm, Transform forearm, Transform hand, Vector3 target)
     {
         Vector3 shoulder = upperArm.position;

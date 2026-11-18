@@ -68,12 +68,12 @@ public sealed class Play2TablePreview : MonoBehaviour
         label.x = seatCamera.WorldToViewportPoint(head.position).x;
         return label;
     }
-    internal Vector3 PotLabelViewport => seatCamera.WorldToViewportPoint(tabletop.position +
-        Vector3.ProjectOnPlane(seatCamera.transform.forward, Vector3.up).normalized * .20f + Vector3.up * .025f);
     private Transform deck;
     private Vector3 DealOrigin => deck.TransformPoint(Vector3.up * .022f);
     private float animationUntil;
     private float nextPreviewAction;
+
+    internal void SetViewportLeft(float left) => seatCamera.rect = new Rect(left, 0, 1f - left, 1);
 
     private void LateUpdate()
     {
@@ -88,17 +88,18 @@ public sealed class Play2TablePreview : MonoBehaviour
             var eye = eyes[viewer - 1];
             float lift = postures[viewer - 1].Weight;
             Vector3 behind = -Vector3.ProjectOnPlane(eye.forward, Vector3.up).normalized;
-            seatCamera.transform.SetPositionAndRotation(eye.position + behind * .20f + Vector3.up * (.035f + .11f * lift),
-                eye.rotation * Quaternion.Euler(3.5f * lift, 0f, 0f));
+            float pushTime = chips.PushTime(viewer - 1);
+            float lean = grips[viewer - 1]?.ReachOverTable ?? 0f;
+            if (pushTime >= 0f) lean = Mathf.Max(lean, Mathf.SmoothStep(0, 1, pushTime / .36f)
+                * (1f - Mathf.SmoothStep(0, 1, (pushTime - .64f) / .58f)));
+            seatCamera.transform.SetPositionAndRotation(eye.position + behind * (.12f - .21f * lean)
+                + Vector3.up * (.035f + .11f * lift + .045f * lean),
+                eye.rotation * Quaternion.Euler(3.5f * lift - lean, 0f, 0f));
         }
+        if (seatCamera.pixelHeight > 0) seatCamera.aspect = (float)seatCamera.pixelWidth / seatCamera.pixelHeight;
         float aspect = Mathf.Min(seatCamera.aspect, 16f / 9f);
         seatCamera.fieldOfView = Camera.HorizontalToVerticalFieldOfView(
             Camera.VerticalToHorizontalFieldOfView(69f + standFraming * 4f, 16f / 9f), aspect);
-        // Leave room for conversation on the left without moving the camera away from the player's eyes.
-        seatCamera.ResetProjectionMatrix();
-        var projection = seatCamera.projectionMatrix;
-        projection.m02 -= .16f;
-        seatCamera.projectionMatrix = projection;
         for (int i = 0; i < grips.Length; i++)
         {
             float push = chips.PushTime(i);
@@ -132,7 +133,8 @@ public sealed class Play2TablePreview : MonoBehaviour
         }
         showdownCards = new Play2ShowdownCards();
         actorSkins = players.Select(player => player.GetComponentsInChildren<SkinnedMeshRenderer>(true)).ToArray();
-        for (int i = 0; i < players.Length; i++) postures[i] = new Play2AllInPosture(players[i].GetComponent<Animator>());
+        for (int i = 0; i < players.Length; i++)
+            postures[i] = new Play2AllInPosture(players[i].GetComponent<Animator>());
         chips = new GameObject("Table pot").AddComponent<Play2TableChips>();
         chips.transform.SetParent(tabletop, false);
         tableAudio = gameObject.AddComponent<Play2TableAudio>();
@@ -156,10 +158,19 @@ public sealed class Play2TablePreview : MonoBehaviour
         SetState(session.State);
     }
 
+    internal bool WatchingPractice => session != null && session.WatchingPractice;
+    internal void WatchRemainingPractice() => session?.WatchRemainingPractice();
+    internal bool IsPractice => session != null && session.IsLocal;
+    internal void NewPracticeAfterBust(string hand) => session?.NewPracticeAfterBust(hand);
     internal bool IsHost => session != null && session.IsHost;
     internal bool ActionPending => session != null && session.ActionPending;
     internal bool IsDealing => Time.time < animationUntil;
     internal bool IsBetting => chips.IsAnimating;
+    internal void ShowPayout(int seat, long amount, bool animate)
+    {
+        chips.ShowPayout(seat, amount, animate);
+        if (Showdown == ShowdownBeat.None) reactions.ShowWinner(seat, false, animate);
+    }
     internal void PlayTurnSound() => tableAudio.YourTurn();
     internal void PlayResultSound() => tableAudio.HandEnd();
     internal void PlayAccusationSound(bool caught) => tableAudio.Accusation(caught);
@@ -173,11 +184,13 @@ public sealed class Play2TablePreview : MonoBehaviour
         AdvanceShowdown();
         if (!IsDealing && Time.time >= nextPreviewAction && session.PlayPreviewOpponent())
             nextPreviewAction = Time.time + 0.65f;
-        bool reactionOpen = reactions.HandlePointer();
-        frontEnd.Present(state, session.Status, reactionOpen);
+        bool chatHasInput = frontEnd.CaptureChatInput();
+        bool reactionOpen = !chatHasInput && reactions.HandlePointer();
+        frontEnd.Present(state, session.Status, chatHasInput || reactionOpen);
         var mouse = UnityEngine.InputSystem.Mouse.current;
-        if (!IsDealing && state?.game?.hasResult != true && mouse?.leftButton.wasPressedThisFrame == true
+        if (!chatHasInput && !IsDealing && state?.game?.hasResult != true && mouse?.leftButton.wasPressedThisFrame == true
             && UnityEngine.EventSystems.EventSystem.current?.IsPointerOverGameObject() != true
+            && seatCamera.pixelRect.Contains(mouse.position.ReadValue())
             && viewer > 0 && grips[viewer - 1] != null && grips[viewer - 1].Contains(mouse.position.ReadValue(), seatCamera))
             grips[viewer - 1].Inspect(!grips[viewer - 1].IsInspecting);
     }
@@ -235,7 +248,7 @@ public sealed class Play2TablePreview : MonoBehaviour
             openedHands = sameHand ? 0 : revealOrder.Length;
             AwardIndex = 0;
         }
-        atmosphere.Present(packet, Showdown, HighlightSeats);
+        atmosphere.Present(packet, Showdown, RevealingSeat, HighlightSeats);
         for (int i = 0; i < postures.Length; i++)
         {
             var seat = game?.seats.FirstOrDefault(s => s.seat == i + 1);
@@ -273,18 +286,19 @@ public sealed class Play2TablePreview : MonoBehaviour
             grips[player] = new Play2CardGrip(players[player], own ? seatCamera.transform : null,
                 tabletop, eyes[player], DealOrigin, firstCard, secondCard, delay, gap,
                 showFaces && game.board.Length == 0 && !game.hasResult, tableAudio.CardSlide);
-            if (folded) grips[player].Fold();
-            else if (revealed) grips[player].Reveal(seat.visibleCards[0], seat.visibleCards[1]);
+            if (folded) grips[player].Fold(false);
+            else if (revealed) grips[player].Reveal(seat.visibleCards[0], seat.visibleCards[1], false);
             else animationUntil = Mathf.Max(animationUntil, Time.time + delay + Play2CardGrip.Duration(gap));
         }
         int first = board;
         while (board < game.board.Length)
         {
-            StartCoroutine(DealBoardCard(game.board[board], board, (board - first) * 0.11f));
+            StartCoroutine(DealBoardCard(game.board[board], board, (board - first) * 0.11f, sameHand || !game.hasResult));
             board++;
         }
         RefreshRequestMarkers();
         reactions.Present(packet);
+        if (!sameHand && Showdown == ShowdownBeat.Finished) reactions.FinishShowdown(game, false);
     }
 
     private void AdvanceShowdown()
@@ -309,24 +323,31 @@ public sealed class Play2TablePreview : MonoBehaviour
                 }
                 Showdown = ShowdownBeat.Award;
                 beatUntil = Time.unscaledTime + 1.6f;
-                reactions.Celebrate(state);
+                ShowAwardWinners();
                 break;
             case ShowdownBeat.Award when Time.unscaledTime >= beatUntil:
                 if (AwardIndex + 1 < awards.Length)
                 {
                     AwardIndex++;
+                    ShowAwardWinners();
                     beatUntil = Time.unscaledTime + 1.45f;
                 }
                 else
                 {
                     Showdown = ShowdownBeat.Finished;
+                    reactions.FinishShowdown(state.game, true);
                     AwardIndex = 0;
                 }
                 break;
             default:
                 return;
         }
-        atmosphere.Present(state, Showdown, HighlightSeats);
+        atmosphere.Present(state, Showdown, RevealingSeat, HighlightSeats);
+    }
+
+    private void ShowAwardWinners()
+    {
+        foreach (int seat in HighlightSeats) reactions.ShowWinner(seat, true, true);
     }
 
     private void RevealNextHand()
@@ -381,14 +402,16 @@ public sealed class Play2TablePreview : MonoBehaviour
         card.SetCard(new Card(value.Rank == Poker.Foundation.Rank.Ace ? 1 : (int)value.Rank, suit));
     }
 
-    private IEnumerator DealBoardCard(int cardId, int index, float delay)
+    private IEnumerator DealBoardCard(int cardId, int index, float delay, bool animate)
     {
-        animationUntil = Mathf.Max(animationUntil, Time.time + delay + BoardDealDuration);
-        if (delay > 0f) yield return new WaitForSeconds(delay);
+        if (animate)
+        {
+            animationUntil = Mathf.Max(animationUntil, Time.time + delay + BoardDealDuration);
+            if (delay > 0f) yield return new WaitForSeconds(delay);
+        }
         var card = Instantiate(cardPrefab, tabletop);
         card.transform.Find("Front").GetComponent<MeshRenderer>().sharedMaterial = cardFaceMaterial;
         cards.Add(card);
-        tableAudio.CardSlide();
         SetCardValue(card, cardId);
 
         var pose = card.transform;
@@ -396,24 +419,29 @@ public sealed class Play2TablePreview : MonoBehaviour
         // Rest the near edge on the felt and raise the far edge towards this seat.
         Quaternion shown = boardFacing * Quaternion.Euler(-14f, 0, 0);
         Vector3 end = boardFacing * new Vector3((index - 2) * .164f, .028f, -.045f);
-        Vector3 start = tabletop.InverseTransformPoint(DealOrigin);
         pose.localScale = Vector3.one * 1.65f;
-        pose.localPosition = start;
-        pose.localRotation = boardFacing * Quaternion.Euler(0f, 0f, 179.9f);
-
-        var motion = AddDealMotion(card, start, end);
-        motion.Initialization();
-        motion.PlayFeedbacks();
-
-        yield return new WaitForSeconds(.54f);
-        var back = pose.localRotation;
-        for (float t = 0; t < 1; t += Time.deltaTime / .27f)
+        if (animate)
         {
-            pose.localRotation = Quaternion.Slerp(back, shown, Mathf.SmoothStep(0, 1, t));
-            yield return null;
+            tableAudio.CardSlide();
+            Vector3 start = tabletop.InverseTransformPoint(DealOrigin);
+            pose.localPosition = start;
+            pose.localRotation = boardFacing * Quaternion.Euler(0f, 0f, 179.9f);
+
+            var motion = AddDealMotion(card, start, end);
+            motion.Initialization();
+            motion.PlayFeedbacks();
+
+            yield return new WaitForSeconds(.54f);
+            var back = pose.localRotation;
+            for (float t = 0; t < 1; t += Time.deltaTime / .27f)
+            {
+                pose.localRotation = Quaternion.Slerp(back, shown, Mathf.SmoothStep(0, 1, t));
+                yield return null;
+            }
+            pose.localRotation = shown;
+            yield return new WaitForSeconds(BoardDealDuration - .81f);
         }
-        pose.localRotation = shown;
-        yield return new WaitForSeconds(BoardDealDuration - .81f);
+        pose.SetLocalPositionAndRotation(end, shown);
         boardCards[index] = card;
         UpdateRequestMarker(index);
     }

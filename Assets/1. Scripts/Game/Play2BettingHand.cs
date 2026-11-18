@@ -11,6 +11,7 @@ internal sealed class Play2BettingHand
     private readonly Quaternion upperRest, lowerRest, wristRest;
     private readonly GameObject viewModel;
     private readonly bool left;
+    private readonly Vector3 shoulderLocal;
     private Vector3 start, release;
     private Quaternion facing;
 
@@ -32,6 +33,7 @@ internal sealed class Play2BettingHand
         upper = animator.GetBoneTransform(left ? HumanBodyBones.LeftUpperArm : HumanBodyBones.RightUpperArm);
         lower = animator.GetBoneTransform(left ? HumanBodyBones.LeftLowerArm : HumanBodyBones.RightLowerArm);
         wrist = animator.GetBoneTransform(left ? HumanBodyBones.LeftHand : HumanBodyBones.RightHand);
+        shoulderLocal = upper.localPosition;
         upperRest = upper.localRotation;
         lowerRest = lower.localRotation;
         wristRest = wrist.localRotation;
@@ -76,16 +78,19 @@ internal sealed class Play2BettingHand
     internal void Push(Vector3 point, float time)
     {
         float approach = Mathf.SmoothStep(0, 1, Mathf.Clamp01(time / .18f));
-        float withdraw = Mathf.SmoothStep(0, 1, Mathf.Clamp01((time - .64f) / .24f));
-        point = Vector3.Lerp(start - facing * Vector3.forward * .06f, point, approach);
-        point = Vector3.Lerp(point, start - facing * Vector3.forward * .07f - Vector3.up * .04f, withdraw);
-        PlacePalm(point, fingers.PointingRotation(left, facing * Vector3.forward), .15f, true);
+        float withdraw = Mathf.SmoothStep(0, 1, Mathf.Clamp01((time - .63f) / .30f));
+        Quaternion down = fingers.PalmRotation(left, facing * Vector3.forward, Vector3.down);
+        Vector3 home = camera != null ? camera.TransformPoint(new Vector3(.31f, -.48f, .16f)) : wrist.TransformPoint(fingers.PushContact(left));
+        Quaternion rest = camera != null ? down : wrist.rotation;
+        float weight = approach * (1f - withdraw);
+        PlacePalm(Vector3.Lerp(home, point, weight), Quaternion.Slerp(rest, down, weight), .32f * weight, true);
     }
 
     private void PlacePalm(Vector3 point, Quaternion rotation, float curl, bool push = false)
     {
         fingers.SetCardGrip(left, curl);
-        Vector3 target = point - rotation * Vector3.Scale(contact.position, wrist.lossyScale);
+        Vector3 pad = push ? fingers.PushContact(left) : contact.position;
+        Vector3 target = point - rotation * Vector3.Scale(pad, wrist.lossyScale);
         if (camera != null)
         {
             PlaceViewArm(target, rotation, push, push);
@@ -185,6 +190,8 @@ internal sealed class Play2BettingHand
 
     private void PlaceViewArm(Vector3 target, Quaternion rotation, bool fromSide = false, bool alignSleeve = false)
     {
+        upper.SetLocalPositionAndRotation(shoulderLocal, upperRest);
+        lower.localRotation = lowerRest;
         Vector3 elbow = fromSide ? new Vector3(.48f, -.43f, .22f) : new Vector3(.28f, -.48f, .12f);
         Quaternion neutralForearm = rotation * Quaternion.Inverse(wristRest);
         Vector3 neutralDirection = neutralForearm * wrist.localPosition.normalized;
@@ -194,6 +201,7 @@ internal sealed class Play2BettingHand
         Transform body = viewModel.transform;
         body.rotation = armRotation * Quaternion.Inverse(lower.rotation) * body.rotation;
         body.position += target - wrist.position;
+        Play2TableArm.AnchorViewSleeve(upper, lower, camera, false);
     }
 
     internal void Release()

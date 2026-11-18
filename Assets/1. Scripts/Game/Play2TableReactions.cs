@@ -23,7 +23,11 @@ internal sealed class Play2TableReactions
     private readonly Transform[] heads = new Transform[4];
     private readonly Quaternion[] headRest = new Quaternion[4];
     private readonly float[] started = { -100, -100, -100, -100 };
-    private readonly bool[] celebrating = new bool[4];
+    private enum ResultPose { None, Win, Loss }
+    private readonly ResultPose[] results = new ResultPose[4];
+    private readonly Animator[] animators = new Animator[4];
+    private readonly int[] resultLayers = new int[4];
+    private readonly bool[] usingResultClip = new bool[4];
     private readonly int[] targets = new int[4];
     private readonly Play2Gesture[] gestures = new Play2Gesture[4];
     private string lastAccusation;
@@ -63,7 +67,9 @@ internal sealed class Play2TableReactions
         menu.gameObject.SetActive(false);
         for (int i = 0; i < actors.Length; i++)
         {
-            heads[i] = actors[i].GetComponent<Animator>().GetBoneTransform(HumanBodyBones.Head);
+            animators[i] = actors[i].GetComponent<Animator>();
+            resultLayers[i] = animators[i].GetLayerIndex("Table Result");
+            heads[i] = animators[i].GetBoneTransform(HumanBodyBones.Head);
             headRest[i] = heads[i].localRotation;
         }
     }
@@ -74,23 +80,13 @@ internal sealed class Play2TableReactions
         bool reset = state?.sessionId != packet?.sessionId || viewer != packet?.viewerSeat;
         bool newHand = state?.game?.handId != packet?.game?.handId;
         state = packet;
+        if (reset || newHand) Release();
+        if (reset) viewer = packet?.viewerSeat ?? 0;
         if (packet?.hasGame != true || packet.hasChat != true) { Close(); return; }
         if (AimSeat != 0 && !packet.members.Any(m => m.seat == AimSeat && m.connected)) AimSeat = 0;
         if (IsOpen && !packet.members.Any(m => m.seat == selected && m.connected)) Close();
         var entries = packet.chat.entries;
-        if (reset || newHand) Release();
-        if (reset)
-        {
-            viewer = packet.viewerSeat;
-            newest = entries.LastOrDefault()?.sequence ?? 0;
-        }
-        if (packet.game.hasResult && packet.game.result?.kind != (int)Poker.Foundation.HoldemResultKind.Showdown)
-            foreach (var seat in packet.game.seats)
-                if (seat.awarded > 0 && !celebrating[seat.seat - 1])
-                {
-                    celebrating[seat.seat - 1] = true;
-                    Begin(seat.seat, seat.seat, Play2Gesture.Celebrate, 0);
-                }
+        if (reset) newest = entries.LastOrDefault()?.sequence ?? 0;
         foreach (var entry in entries)
         {
             if (entry.sequence <= newest) continue;
@@ -126,14 +122,37 @@ internal sealed class Play2TableReactions
         started[index] = Time.time + delay;
     }
 
-    internal void Celebrate(HoldemRoomPacket packet)
+    internal void ShowWinner(int seat, bool handOnTable, bool animate)
     {
-        foreach (var seat in packet.game.seats)
+        ShowResult(seat, ResultPose.Win, handOnTable, animate);
+    }
+
+    internal void FinishShowdown(HoldemGamePacket game, bool animate)
+    {
+        foreach (var seat in game.seats)
         {
             if (!Play2SettlementSummary.IsPublicHand(seat)) continue;
-            celebrating[seat.seat - 1] = seat.awarded > 0;
-            Begin(seat.seat, seat.seat, seat.awarded > 0 ? Play2Gesture.Celebrate : Play2Gesture.Despair, 0f);
+            ShowResult(seat.seat, seat.awarded > 0 ? ResultPose.Win : ResultPose.Loss, true, animate);
         }
+    }
+
+    private void ShowResult(int seat, ResultPose result, bool handOnTable, bool animate)
+    {
+        int i = seat - 1;
+        if (results[i] == result) return;
+        results[i] = result;
+        // An unrevealed winner still needs the card arm. First person has a separate hand rig.
+        if (handOnTable && seat != viewer && resultLayers[i] >= 0 && animators[i].isActiveAndEnabled)
+        {
+            CancelGesture(seat);
+            usingResultClip[i] = true;
+            var a = animators[i];
+            a.Play(result == ResultPose.Win ? "Table Result.Win" : "Table Result.Loss",
+                resultLayers[i], animate ? 0f : 1f);
+            a.SetLayerWeight(resultLayers[i], animate ? 0f : 1f);
+        }
+        else if (animate)
+            Begin(seat, seat, result == ResultPose.Win ? Play2Gesture.Celebrate : Play2Gesture.Despair, 0f);
     }
 
     internal void Animate()
@@ -149,10 +168,16 @@ internal sealed class Play2TableReactions
         }
         for (int i = 0; i < actors.Length; i++)
         {
+            if (usingResultClip[i] && animators[i].isActiveAndEnabled)
+            {
+                int layer = resultLayers[i];
+                float blend = animators[i].GetLayerWeight(layer);
+                if (blend < 1f) animators[i].SetLayerWeight(layer, Mathf.MoveTowards(blend, 1f, Time.unscaledDeltaTime / .24f));
+            }
             float elapsed = Time.time - started[i];
             if (started[i] < 0)
             {
-                if (celebrating[i] && heads[i] != null)
+                if (results[i] == ResultPose.Win && !usingResultClip[i] && heads[i] != null)
                     heads[i].localRotation = headRest[i] * Quaternion.Euler(-8f + 1.4f * Mathf.Sin(Time.time * 2.2f), 0f, -4f);
                 continue;
             }
@@ -198,7 +223,7 @@ internal sealed class Play2TableReactions
         var mouse = Mouse.current;
         if (state?.hasGame != true || mouse?.leftButton.wasPressedThisFrame != true) return wasOpen;
         Vector2 point = mouse.position.ReadValue();
-        if (EventSystem.current?.IsPointerOverGameObject() == true) return wasOpen;
+        if (!camera.pixelRect.Contains(point) || EventSystem.current?.IsPointerOverGameObject() == true) return wasOpen;
         Close();
         int nearest = -1;
         float distance = float.PositiveInfinity;
@@ -264,7 +289,10 @@ internal sealed class Play2TableReactions
         for (int i = 0; i < actors.Length; i++)
         {
             chips.RestHand(i);
-            celebrating[i] = false;
+            results[i] = ResultPose.None;
+            if (usingResultClip[i] && animators[i] != null && animators[i].isActiveAndEnabled)
+                animators[i].SetLayerWeight(resultLayers[i], 0f);
+            usingResultClip[i] = false;
             if (heads[i] != null) heads[i].localRotation = headRest[i];
             started[i] = -100;
         }

@@ -88,6 +88,12 @@ public sealed partial class Play2FingerRig : MonoBehaviour
             * Quaternion.Inverse(Quaternion.LookRotation(length, normal));
     }
 
+    internal Vector3 PushContact(bool left)
+    {
+        var hand = hands[left ? 0 : 1];
+        return (hand[1].Bend + hand[2].Bend + hand[3].Bend) / 3f;
+    }
+
     internal Quaternion ThumbsDownRotation(bool left, Vector3 palmNormal)
     {
         var hand = hands[left ? 0 : 1];

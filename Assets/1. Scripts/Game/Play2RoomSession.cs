@@ -35,6 +35,7 @@ public sealed class Play2RoomSession : MonoBehaviour
     internal string Status => status;
     internal bool IsConnecting => connecting || (online != null && state == null);
     internal bool IsLocal => preview != null;
+    internal bool WatchingPractice { get; private set; }
     internal bool IsHost => IsLocal || (online != null && online.IsHost);
     internal string RoomCode => online?.RoomName ?? "";
     internal bool CanReconnect => reconnectIdentity != null && state == null;
@@ -271,14 +272,20 @@ public sealed class Play2RoomSession : MonoBehaviour
         if (preview != null || online != null || connecting) return;
         ClearReconnect();
         status = "";
+        var analyzer = CreateRoomAnalyzer(hostAnalyzer);
+        if (analyzer != null) analyzer.gameObject.SetActive(true);
+        CreatePracticeTable();
+    }
+
+    private void CreatePracticeTable()
+    {
+        WatchingPractice = false;
         previewRandom = new CryptographicRandomSource();
         var nickname = PlayerPrefs.GetString("Play2.Nickname", "").Trim();
         var host = new HoldemClientIdentity(nickname.Length == 0 ? "플레이어" : nickname);
         preview = new HoldemHostCommandBridge(host, HoldemLlmTableDealer.CreateConfig(),
             new SeatId(1), previewRandom, utterancePolicy: HoldemLlmTableDealer.CreateUtterancePolicy(), chatEnabled: true);
-        var analyzer = CreateRoomAnalyzer(hostAnalyzer);
-        if (analyzer != null) analyzer.gameObject.SetActive(true);
-        previewDealer = new HoldemLlmTableDealer(preview, analyzer);
+        previewDealer = new HoldemLlmTableDealer(preview, roomAnalyzer);
         string[] opponents = { "황소", "고양이", "부엉이" };
         for (int i = 0; i < previewSeats.Length; i++)
         {
@@ -287,6 +294,27 @@ public sealed class Play2RoomSession : MonoBehaviour
             preview.Dispatch(previewSeats[i], identity.AdmissionRequest());
             preview.Dispatch(previewSeats[i], PreviewRequest("ready"));
         }
+    }
+
+    internal void WatchRemainingPractice()
+    {
+        if (!IsLocal || state?.game?.hasResult != true || !state.game.canContinue || state.paused || ActionPending
+            || !Array.Exists(state.game.seats, seat => seat.viewer && seat.stack == 0)) return;
+        WatchingPractice = true;
+        StartHand();
+    }
+
+    internal void NewPracticeAfterBust(string completedHand)
+    {
+        // A fresh bot table is local to this player. A zero stack during an all-in is still live.
+        if (!IsLocal || leaving || ActionPending || state?.game?.hasResult != true || state.paused
+            || state.game.handId != completedHand) return;
+        var self = Array.Find(state.game.seats, seat => seat.seat == state.viewerSeat);
+        if (self == null || self.stack != 0) return;
+
+        DisposePracticeTable();
+        CreatePracticeTable();
+        if (preview.TryCreateProjection(previewSeats[0], out state)) StartHand();
     }
 
     private HoldemWireRequest PreviewRequest(string type) => new HoldemWireRequest
@@ -375,14 +403,19 @@ public sealed class Play2RoomSession : MonoBehaviour
             online = null;
         }
 
+        DisposePracticeTable();
+        DestroyRoomAnalyzer();
+        state = null;
+    }
+
+    private void DisposePracticeTable()
+    {
         previewDealer?.Dispose();
         previewDealer = null;
-        DestroyRoomAnalyzer();
         preview?.Dispose();
         preview = null;
         previewRandom?.Dispose();
         previewRandom = null;
-        state = null;
     }
 
     private void OnDestroy()

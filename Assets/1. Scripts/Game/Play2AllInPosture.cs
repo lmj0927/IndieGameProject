@@ -1,8 +1,7 @@
 using System;
 using UnityEngine;
 
-// The shipped avatars have a seated clip. Blend only the lower body towards
-// each avatar's own standing bind pose, with its feet planted by the chair.
+// Older rigs without table-specific transitions retain the planted-foot fallback.
 internal sealed class Play2AllInPosture
 {
     private static readonly HumanBodyBones[] StandingBones =
@@ -17,7 +16,13 @@ internal sealed class Play2AllInPosture
     private readonly Quaternion[] animated = new Quaternion[StandingBones.Length];
     private readonly Transform hips, leftFoot, rightFoot;
     private Vector3 hipLocal;
-    private bool modified;
+    private static readonly int AtTable = Animator.StringToHash("AtTable");
+    private static readonly int Ready = Animator.StringToHash("Ready");
+    private readonly Animator animator;
+    private readonly bool hasStandClip;
+    private Vector3 plantedFeet;
+    private float seatedHipHeight;
+    private bool modified, standCycle;
     private float progress;
 
     internal bool AllIn { get; set; }
@@ -26,6 +31,8 @@ internal sealed class Play2AllInPosture
 
     internal Play2AllInPosture(Animator animator)
     {
+        this.animator = animator;
+        hasStandClip = Array.Exists(animator.parameters, p => p.nameHash == AtTable && p.type == AnimatorControllerParameterType.Bool);
         var rest = animator.avatar.humanDescription.skeleton;
         for (int i = 0; i < joints.Length; i++)
         {
@@ -47,8 +54,9 @@ internal sealed class Play2AllInPosture
     {
         if (!modified) return;
         hips.localPosition = hipLocal;
-        for (int i = 0; i < joints.Length; i++)
-            if (joints[i] != null) joints[i].localRotation = animated[i];
+        if (!hasStandClip)
+            for (int i = 0; i < joints.Length; i++)
+                if (joints[i] != null) joints[i].localRotation = animated[i];
         modified = false;
     }
 
@@ -56,7 +64,32 @@ internal sealed class Play2AllInPosture
     {
         progress = Mathf.MoveTowards(progress, AllIn && !pushing ? 1f : 0f, Time.deltaTime / .68f);
         Rise = 0f;
-        if (progress <= 0f || firstPerson || !hips.gameObject.activeInHierarchy) return;
+        if (firstPerson || !hips.gameObject.activeInHierarchy) return;
+        if (hasStandClip)
+        {
+            // Unity resets animator parameters when a hidden seat becomes visible again.
+            if (!animator.GetBool(AtTable)) animator.SetBool(AtTable, true);
+            bool standingAtTable = AllIn && !pushing;
+            Vector3 feet = (leftFoot.position + rightFoot.position) * .5f;
+            if (standingAtTable && !standCycle)
+            {
+                standCycle = true;
+                seatedHipHeight = hips.position.y;
+                plantedFeet = feet;
+            }
+            animator.SetBool(Ready, standingAtTable);
+            if (!standingAtTable && !animator.IsInTransition(0) && animator.GetCurrentAnimatorStateInfo(0).IsName("Seated")) standCycle = false;
+            if (standCycle)
+            {
+                hipLocal = hips.localPosition;
+                // In-place rise clips slide the ankles backwards beneath the seat.
+                hips.position += plantedFeet - feet;
+                Rise = Mathf.Max(0f, hips.position.y - seatedHipHeight);
+                modified = true;
+            }
+            return;
+        }
+        if (progress <= 0f) return;
         Vector3 feetBefore = (leftFoot.position + rightFoot.position) * .5f;
         hipLocal = hips.localPosition;
         float weight = Weight;

@@ -1,4 +1,5 @@
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using Poker.Application;
 using Poker.Foundation;
@@ -11,7 +12,10 @@ internal sealed class Play2TableChips : MonoBehaviour
     private readonly Transform[] moving = new Transform[4];
     private readonly Play2BettingHand[] hands = new Play2BettingHand[4];
     private readonly Queue<HoldemHistoryEntryPacket> bets = new();
-    private readonly Transform[] allInStack = new Transform[6];
+    private readonly Transform[] allInStack = new Transform[12];
+    private int pushChips;
+    private readonly long[] paidBySeat = new long[4];
+    private long handPot, paidTotal;
     private readonly Transform[] heads = new Transform[4];
     private HoldemHistoryEntryPacket action;
     private bool struck;
@@ -70,7 +74,7 @@ internal sealed class Play2TableChips : MonoBehaviour
             heads[i] = actors[i].GetComponent<Animator>().GetBoneTransform(HumanBodyBones.Head);
         }
         for (int i = 0; i < allInStack.Length; i++)
-            allInStack[i] = MakeChip("All-in chip " + (i + 1), StackColor(i < 3 ? 0 : 6));
+            allInStack[i] = MakeChip("All-in chip " + (i + 1), StackColor(i % 2 == 0 ? 0 : 6));
     }
 
     private static Vector3 StackPosition(int i) => PotPosition
@@ -106,14 +110,18 @@ internal sealed class Play2TableChips : MonoBehaviour
     {
         var game = next?.hasGame == true ? next.game : null;
         var old = previous?.hasGame == true ? previous.game : null;
-        targetCount = game == null || game.pot <= 0 ? 0 : Mathf.Clamp(1 + (int)Math.Log(game.pot, 1.6), 1, pile.Length);
-        if (game == null || old == null || game.handId != old.handId || viewer != next.viewerSeat)
+        handPot = game?.pot ?? 0;
+        if (game == null || old == null || previous.sessionId != next.sessionId || game.handId != old.handId || viewer != next.viewerSeat)
         {
             ResetHands();
+            paidTotal = 0;
+            Array.Clear(paidBySeat, 0, paidBySeat.Length);
+            targetCount = PileSize(handPot);
             viewer = next?.viewerSeat ?? 1;
             ShowPile(targetCount);
             return;
         }
+        targetCount = PileSize(handPot - paidTotal);
         var history = next.history;
         if (history?.entries == null || previous.history?.entries == null) return;
         long previousCount = previous.history.omittedCount + previous.history.entries.Length;
@@ -144,7 +152,7 @@ internal sealed class Play2TableChips : MonoBehaviour
         if (action.allIn)
         {
             AnimatePush(time);
-            if (time >= .96f) FinishBet();
+            if (time >= 1.30f) FinishBet();
             return;
         }
         hands[index].Pose(time);
@@ -218,10 +226,11 @@ internal sealed class Play2TableChips : MonoBehaviour
         if (action.allIn)
         {
             pushSide = side;
-            pushStart = outward * .54f + Vector3.up * PotPosition.y;
-            pushStop = Vector3.Lerp(pushStart, flightEnd, .62f);
-            hands[activeSeat].Begin(transform.TransformPoint(pushStart), transform.TransformPoint(pushStop));
-            foreach (var token in allInStack) token.gameObject.SetActive(true);
+            pushStart = outward * .58f + Vector3.up * PotPosition.y;
+            pushStop = Vector3.Lerp(pushStart, flightEnd, .28f);
+            hands[activeSeat].Begin(PushPalm(0f, false), PushPalm(.65f, false));
+            pushChips = Mathf.Clamp(1 + (int)Math.Log(Math.Max(1L, action.amount), 1.5), 1, allInStack.Length);
+            for (int i = 0; i < allInStack.Length; i++) allInStack[i].gameObject.SetActive(i < pushChips);
         }
         else moving[activeSeat].gameObject.SetActive(true);
     }
@@ -289,24 +298,74 @@ internal sealed class Play2TableChips : MonoBehaviour
         float forward = Mathf.SmoothStep(0, 1, Mathf.Clamp01((time - .21f) / .40f));
         Vector3 center = Vector3.Lerp(pushStart, pushStop, forward);
         Vector3 outward = Vector3.ProjectOnPlane(pushStart, Vector3.up).normalized;
-        return transform.TransformPoint(center + pushSide * (cardHand ? -.083f : .083f)
-            + outward * .032f + Vector3.up * .019f);
+        return transform.TransformPoint(center + pushSide * (cardHand ? -.125f : .125f)
+            + outward * .078f + Vector3.up * .021f);
     }
 
     private void AnimatePush(float time)
     {
         float progress = Mathf.SmoothStep(0, 1, Mathf.Clamp01((time - .21f) / .40f));
         float rake = Mathf.SmoothStep(0, 1, Mathf.Clamp01((time - .63f) / .33f));
-        Vector3 center = Vector3.Lerp(Vector3.Lerp(pushStart, pushStop, progress), new Vector3(flightEnd.x, PotPosition.y, flightEnd.z), rake);
-        for (int i = 0; i < allInStack.Length; i++)
+        Vector3 center = Vector3.Lerp(pushStart, pushStop, progress);
+        for (int i = 0; i < pushChips; i++)
         {
             var token = allInStack[i];
-            token.localPosition = center + pushSide * (i < 3 ? -.034f : .034f)
-                + Vector3.up * (i % 3 * .0062f);
-            token.localRotation = Quaternion.Euler(0, StackYaw(i), 0);
+            Vector3 offset = pushSide * (i % 2 == 0 ? -.063f : .063f) + Vector3.up * (i / 2 * .0062f);
+            int slot = Mathf.Clamp(targetCount - pushChips + i, 0, pile.Length - 1);
+            token.localPosition = Vector3.Lerp(center + offset, StackPosition(slot), rake);
+            token.localRotation = Quaternion.Euler(0, Mathf.LerpAngle(StackYaw(i), StackYaw(slot), rake), 0);
         }
-        hands[activeSeat].Push(PushPalm(time, false), time);
+        if (time < .96f)
+            hands[activeSeat].Push(PushPalm(time, false), time);
+        else if (allInStack[0].gameObject.activeSelf)
+        {
+            foreach (var token in allInStack) token.gameObject.SetActive(false);
+            hands[activeSeat].Rest();
+            ShowPile(targetCount);
+        }
         if (!landed && progress >= 1) { sound.ChipLand(); landed = true; }
+    }
+
+    private int PileSize(long chips) => chips <= 0 ? 0 : Mathf.Clamp(1 + (int)Math.Log(chips, 1.6), 1, pile.Length);
+
+    // A tie can show several hands for the same pot. Only a newly credited amount moves.
+    internal void ShowPayout(int seat, long amount, bool animate)
+    {
+        int index = seat - 1;
+        long increase = amount - paidBySeat[index];
+        if (increase <= 0) return;
+        paidBySeat[index] = amount;
+        paidTotal += increase;
+        int previousCount = targetCount;
+        targetCount = PileSize(handPot - paidTotal);
+        ShowPile(targetCount);
+        if (animate) StartCoroutine(SlidePayout(index, Mathf.Clamp(previousCount - targetCount, 1, 3)));
+    }
+
+    private IEnumerator SlidePayout(int index, int count)
+    {
+        Vector3 outward = Vector3.ProjectOnPlane(transform.InverseTransformPoint(eyes[index].position), Vector3.up).normalized;
+        Vector3 side = Vector3.Cross(Vector3.up, outward);
+        Vector3 destination = outward * .56f + side * .10f;
+        int first = index * 3;
+        for (int i = 0; i < count; i++) allInStack[first + i].gameObject.SetActive(true);
+        float start = Time.unscaledTime;
+        float t;
+        do
+        {
+            t = Mathf.Clamp01((Time.unscaledTime - start) / .58f);
+            float slide = Mathf.SmoothStep(0f, 1f, t);
+            for (int i = 0; i < count; i++)
+            {
+                var token = allInStack[first + i];
+                Vector3 from = StackPosition(i);
+                Vector3 to = destination + side * (i * .015f) + Vector3.up * from.y;
+                token.localPosition = Vector3.Lerp(from, to, slide);
+                token.localRotation = Quaternion.Euler(0, StackYaw(i) + slide * (7f + i * 4f), 0);
+            }
+            yield return null;
+        } while (t < 1f);
+        for (int i = 0; i < count; i++) allInStack[first + i].gameObject.SetActive(false);
     }
 
     private void ShowPile(int count)
@@ -317,6 +376,7 @@ internal sealed class Play2TableChips : MonoBehaviour
 
     private void ResetHands()
     {
+        StopAllCoroutines();
         RestoreFlinch();
         foreach (var token in allInStack) if (token != null) token.gameObject.SetActive(false);
         bets.Clear();
