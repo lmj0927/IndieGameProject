@@ -22,9 +22,10 @@ internal sealed class Play2HandGuide
         ("하이 카드", "A♦ J♣ 9♥ 6♣ 2♠")
     };
 
-    private readonly TextMeshProUGUI summary, cards;
+    private readonly TextMeshProUGUI summary, cards, wallet, result;
+    private readonly RectTransform walletDivider;
     private readonly RectTransform panel, legend, overlay;
-    private bool expanded, actionPickerOpen;
+    private bool expanded, actionPickerOpen, village;
     internal RectTransform HelpButton { get; }
     internal bool IsOpen => expanded && !actionPickerOpen;
     private readonly UnityEngine.UI.Image[] rankBackgrounds = new UnityEngine.UI.Image[Ranks.Length];
@@ -43,6 +44,16 @@ internal sealed class Play2HandGuide
             Play2UGui.Gold, font, style: FontStyles.Bold);
         summary.textWrappingMode = TextWrappingModes.NoWrap;
         Play2HudArt.Fit(summary, 16);
+        wallet = Play2UGui.Text("Your Chips", panel, "", new Vector2(44, 0), new Vector2(102, 31), 20,
+            Play2HudArt.MarketInk, font, TextAlignmentOptions.MidlineRight, FontStyles.Bold);
+        wallet.textWrappingMode = TextWrappingModes.NoWrap;
+        Play2HudArt.Fit(wallet, 13);
+        walletDivider = Play2UGui.Panel("Wallet Divider", panel, Vector2.zero, new Vector2(1, 21),
+            Play2UGui.Hex("C6B58F"));
+        result = Play2UGui.Text("Your Result", panel, "", new Vector2(0, -17), new Vector2(212, 20), 15,
+            Play2HudArt.MarketBrown, font, style: FontStyles.Bold);
+        result.textWrappingMode = TextWrappingModes.NoWrap;
+        Play2HudArt.Fit(result, 12);
         var help = Play2HudArt.Button("Hand Help", parent, "족보 ?", new Vector2(-131, -32), new Vector2(80, 34),
             "PlayingBadge", Play2UGui.Cream, font, Toggle, 16);
         HelpButton = help.GetComponent<RectTransform>();
@@ -109,6 +120,36 @@ internal sealed class Play2HandGuide
     internal void Close() { expanded = false; UpdateLayout(); }
     internal void SetActionPickerOpen(bool value) { actionPickerOpen = value; UpdateLayout(); }
     internal string CurrentRank => summary.text;
+
+    internal void SetVillageTheme(bool value)
+    {
+        village = value;
+        Play2HudArt.Apply(panel.GetComponent<UnityEngine.UI.Image>(), village ? "MarketSeat" : "PlayingBadge");
+        if (!village) panel.GetComponent<UnityEngine.UI.Image>().color = Play2UGui.Hex("10191CBF");
+        panel.anchorMin = panel.anchorMax = new Vector2(village ? .22f : .33f, 0);
+        panel.sizeDelta = village ? new Vector2(230, 68) : new Vector2(202, 85);
+        panel.anchoredPosition = new Vector2(0, village ? 54 : 56);
+        summary.rectTransform.sizeDelta = village ? new Vector2(98, 31) : new Vector2(182, 32);
+        summary.rectTransform.anchoredPosition = village ? new Vector2(-54, 0) : new Vector2(0, 18);
+        summary.alignment = village ? TextAlignmentOptions.MidlineLeft : TextAlignmentOptions.Center;
+        summary.color = village ? Play2HudArt.MarketMuted : Play2UGui.Gold;
+        wallet.gameObject.SetActive(village);
+        walletDivider.gameObject.SetActive(village);
+        result.gameObject.SetActive(false);
+    }
+
+    internal void PresentWallet(long chips, string playerState)
+    {
+        if (!village) return;
+        wallet.text = $"내 칩 {chips}";
+        bool hasStatus = !string.IsNullOrEmpty(playerState);
+        result.gameObject.SetActive(hasStatus);
+        result.text = playerState;
+        float y = hasStatus ? 8 : 0;
+        summary.rectTransform.anchoredPosition = new Vector2(-54, y);
+        walletDivider.anchoredPosition = new Vector2(1, y);
+        wallet.rectTransform.anchoredPosition = new Vector2(53, y);
+    }
 
     private void UpdateLayout()
     {

@@ -13,7 +13,7 @@ internal sealed partial class Play2TableHud
         private readonly RectTransform card, content, tableFooter;
         private readonly TMP_FontAsset font;
         private readonly TextMeshProUGUI title, reason, heading;
-        private readonly Button next, review, rematchReady;
+        private readonly Button next, review, rematchReady, inspect;
         private readonly ScrollRect scroll;
         private readonly TextMeshProUGUI nextLabel, rematchLabel, rematchStatus;
         private readonly SeatRow[] seats = new SeatRow[4];
@@ -45,7 +45,7 @@ internal sealed partial class Play2TableHud
             AnchorTop(heading.rectTransform, new Vector2(-230, -33));
             AnchorTop(title.rectTransform, new Vector2(-80, -67));
             AnchorTop(reason.rectTransform, new Vector2(0, -109));
-            var inspect = Play2HudArt.Button("Inspect Table", card, "테이블 보기", new Vector2(317, 281), new Vector2(116, 32),
+            inspect = Play2HudArt.Button("Inspect Table", card, "테이블 보기", new Vector2(317, 281), new Vector2(116, 32),
                 "ActionRow", Play2UGui.Cream, font, () => SetTableView(true), 15);
             AnchorTop((RectTransform)inspect.transform, new Vector2(317, -35));
             tableFooter = Play2HudArt.Plate("Table Result Actions", parent, new Vector2(-190, 58), new Vector2(354, 90), "PlayingBadge");
@@ -146,6 +146,29 @@ internal sealed partial class Play2TableHud
             {
                 Label(text, headers, new Vector2(x, 0), new Vector2(width, 24), 14, Play2UGui.Hex("BAC5C4")).text = text;
             }
+        }
+
+        internal void SetVillageTheme(bool village)
+        {
+            Play2HudArt.Apply(card.GetComponent<Image>(), village ? "MarketPanel" : "PinePanel");
+            if (!village) card.GetComponent<Image>().color = Play2UGui.Hex("152124FF");
+            Play2HudArt.Apply(tableFooter.GetComponent<Image>(), village ? "MarketSeat" : "PlayingBadge");
+            foreach (var button in new[] { inspect, review, rematchReady, next })
+            {
+                Play2HudArt.Apply((Image)button.targetGraphic, button == next
+                    ? village ? "MarketPrimary" : "GoldButton"
+                    : village ? "MarketButton" : "ActionRow");
+                button.GetComponentInChildren<TMP_Text>(true).color = button == next ? PaperInk
+                    : village ? Play2HudArt.MarketInk : Play2UGui.Cream;
+            }
+            var textColor = village ? Play2HudArt.MarketInk : Play2UGui.Cream;
+            reason.color = title.color = rematchStatus.color = tableNoAccusation.color =
+                potDetails.color = accusationDetails.color = textColor;
+            heading.color = requestHeading.color = village ? Play2HudArt.MarketBrown : Play2UGui.Gold;
+            foreach (var label in content.Find("Result Columns").GetComponentsInChildren<TMP_Text>(true))
+                label.color = village ? Play2HudArt.MarketMuted : Play2UGui.Hex("BAC5C4");
+            foreach (var seat in seats) seat.SetVillageTheme(village);
+            foreach (var request in requests) request.SetVillageTheme(village);
         }
 
         private TextMeshProUGUI Label(string label, Transform parent, Vector2 position, Vector2 size, int fontSize, Color color)
@@ -350,6 +373,7 @@ internal sealed partial class Play2TableHud
             private readonly TextMeshProUGUI name, paid, category, award;
             private readonly MiniCard[] hand = new MiniCard[2], best = new MiniCard[5];
             private readonly Image background;
+            private bool village;
             internal SeatRow(RectTransform parent, TMP_FontAsset font)
             {
                 frame = TopRect("Showdown Player", parent, 0, 62);
@@ -374,6 +398,12 @@ internal sealed partial class Play2TableHud
                     return text;
                 }
             }
+            internal void SetVillageTheme(bool value)
+            {
+                village = value;
+                name.color = paid.color = category.color = village ? Play2HudArt.MarketInk : Play2UGui.Cream;
+            }
+
             internal void Present(HoldemSeatPacket seat, string displayName, float y)
             {
                 frame.anchoredPosition = new Vector2(0, -y);
@@ -383,8 +413,10 @@ internal sealed partial class Play2TableHud
                 category.text = shown ? Play2SettlementSummary.HandName(Play2SettlementSummary.Value(seat))
                     : seat.status == (int)HoldemSeatStatus.Folded ? "폴드" : "핸드 비공개";
                 award.text = seat.awarded > 0 ? "+" + seat.awarded + "칩" : "—";
-                award.color = seat.awarded > 0 ? Play2UGui.Gold : Play2UGui.Hex("899A98");
-                background.color = seat.awarded > 0 ? Play2UGui.Hex("514930FF") : Play2UGui.Hex("243236FF");
+                award.color = village ? seat.awarded > 0 ? Play2HudArt.MarketBrown : Play2HudArt.MarketMuted
+                    : seat.awarded > 0 ? Play2UGui.Gold : Play2UGui.Hex("899A98");
+                background.color = village ? Play2UGui.Hex(seat.awarded > 0 ? "F7D6A2" : "F8ECCE")
+                    : Play2UGui.Hex(seat.awarded > 0 ? "514930FF" : "243236FF");
                 for (int i = 0; i < hand.Length; i++) hand[i].Present(shown ? seat.visibleCards[i] : -1);
                 var ordered = shown ? Play2SettlementSummary.OrderedBestCards(seat) : Array.Empty<int>();
                 for (int i = 0; i < best.Length; i++) best[i].Present(shown ? ordered[i] : -1);
@@ -438,6 +470,13 @@ internal sealed partial class Play2TableHud
                     return text;
                 }
             }
+            internal void SetVillageTheme(bool village)
+            {
+                source.color = village ? Play2HudArt.MarketBrown : Play2UGui.Gold;
+                message.color = village ? Play2HudArt.MarketInk : Play2UGui.Cream;
+                interpretation.color = village ? Play2HudArt.MarketMuted : Play2UGui.Hex("BAC5C4");
+            }
+
             internal float Present(HoldemDealerSelectionPacket item, string name, float y)
             {
                 frame.anchoredPosition = new Vector2(0, -y);

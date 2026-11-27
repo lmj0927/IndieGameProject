@@ -9,12 +9,14 @@ internal sealed class Play2EmotionWheelGraphic : UnityEngine.UI.MaskableGraphic
     private const float InnerRadius = 112f;
     private int count;
     private int selected = -1;
+    private bool village;
 
-    internal void SetSelection(int segmentCount, int segment)
+    internal void SetSelection(int segmentCount, int segment, bool useVillageTheme)
     {
-        if (count == segmentCount && selected == segment) return;
+        if (count == segmentCount && selected == segment && village == useVillageTheme) return;
         count = segmentCount;
         selected = segment;
+        village = useVillageTheme;
         SetVerticesDirty();
     }
 
@@ -29,7 +31,7 @@ internal sealed class Play2EmotionWheelGraphic : UnityEngine.UI.MaskableGraphic
         mesh.Clear();
         if (count == 0) return;
 
-        Band(mesh, 0f, InnerRadius - 5f, 0f, 360f, Play2UGui.Hex("101B18F5"));
+        Band(mesh, 0f, InnerRadius - 5f, 0f, 360f, village ? Play2UGui.Hex("263E2DEC") : Play2UGui.Hex("101B18F5"));
         Band(mesh, InnerRadius - 5f, InnerRadius - 3f, 0f, 360f, Play2UGui.Trim);
         Band(mesh, Radius + 2f, Radius + 3f, 0f, 360f, Play2UGui.Trim);
         float sector = 360f / count;
@@ -38,9 +40,12 @@ internal sealed class Play2EmotionWheelGraphic : UnityEngine.UI.MaskableGraphic
             float start = (i - .5f) * sector + 1.35f;
             float end = (i + .5f) * sector - 1.35f;
             bool active = i == selected;
-            Band(mesh, InnerRadius, Radius, start, end,
-                active ? Play2UGui.Hex("DFC28C") : Play2UGui.Hex("18372DF2"));
-            Band(mesh, Radius - 3f, Radius, start, end, active ? Play2UGui.Gold : Play2UGui.Hex("648476B0"));
+            Color fill = village
+                ? active ? Play2UGui.Hex("F5B96C") : Play2UGui.Hex("EEE1BDEB")
+                : active ? Play2UGui.Hex("DFC28C") : Play2UGui.Hex("18372DF2");
+            Band(mesh, InnerRadius, Radius, start, end, fill);
+            Band(mesh, Radius - 3f, Radius, start, end,
+                active ? Play2UGui.Gold : village ? Play2HudArt.MarketEdge : Play2UGui.Hex("648476B0"));
         }
     }
 

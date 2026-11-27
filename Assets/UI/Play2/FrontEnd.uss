@@ -29,6 +29,10 @@
     background-color: rgba(22, 16, 12, 0.92); border-width: 1px; border-color: #846647; border-radius: 9px;
 }
 .seat.mine { border-color: #e8833a; }
+.seat-name, .seat-state {
+    align-self: stretch; max-width: 100%; overflow: hidden; text-overflow: ellipsis;
+    white-space: nowrap; -unity-text-align: middle-center;
+}
 .seat-name { -unity-font-style: bold; font-size: 18px; }
 .seat-state { color: #e8c6a2; font-size: 14px; }
 .seat-state.ready { color: #a8e5a3; }

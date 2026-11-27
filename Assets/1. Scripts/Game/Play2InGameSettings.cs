@@ -1,3 +1,4 @@
+using System;
 using TMPro;
 using UnityEngine;
 
@@ -45,12 +46,14 @@ internal sealed class Play2InGameSettings
     private readonly UnityEngine.UI.Image fullscreenIcon;
     private readonly TextMeshProUGUI volumeValue;
     private bool fullscreen;
+    private readonly Action<bool> applyTheme;
     private readonly UnityEngine.UI.Image outdoorMap, indoorMap;
 
     internal bool IsOpen => overlay.gameObject.activeSelf;
 
-    internal Play2InGameSettings(RectTransform parent, TMP_FontAsset font)
+    internal Play2InGameSettings(RectTransform parent, TMP_FontAsset font, Action<bool> applyTheme)
     {
+        this.applyTheme = applyTheme;
         overlay = Play2UGui.Fill("Settings Overlay", parent);
         Play2HudArt.Apply(Play2UGui.Image(overlay, Color.white, true), "Scrim");
         var panel = Play2HudArt.Plate("Settings Card", overlay, Vector2.zero, new Vector2(524, 352), "CreamPanel", true);
@@ -94,7 +97,7 @@ internal sealed class Play2InGameSettings
         var screen = Play2HudArt.Button("Fullscreen Switch", panel, "", new Vector2(207, 14), new Vector2(61, 32),
             "SwitchOff", Play2UGui.Ink, font, ToggleFullscreen);
         fullscreenIcon = (UnityEngine.UI.Image)screen.targetGraphic;
-        outdoorMap = (UnityEngine.UI.Image)Play2HudArt.Button("Outdoor Map", panel, "기존 맵", new Vector2(27, -47), new Vector2(126, 36),
+        outdoorMap = (UnityEngine.UI.Image)Play2HudArt.Button("Outdoor Map", panel, "마을 장터", new Vector2(27, -47), new Vector2(126, 36),
             "ActionRow", Play2UGui.Cream, font, () => ChooseMap(false), 17).targetGraphic;
         indoorMap = (UnityEngine.UI.Image)Play2HudArt.Button("Indoor Map", panel, "어두운 밀실", new Vector2(170, -47), new Vector2(136, 36),
             "ActionRow", Play2UGui.Cream, font, () => ChooseMap(true), 17).targetGraphic;
@@ -139,6 +142,7 @@ internal sealed class Play2InGameSettings
     private void ChooseMap(bool indoor)
     {
         Play2TableAtmosphere.SelectRoom(indoor);
+        applyTheme(!indoor);
         UpdateMapChoice();
     }
 

@@ -121,9 +121,10 @@ public sealed class Play2Lobby : MonoBehaviour
                 Vector3 end = actors[i].transform.localPosition;
                 StartCoroutine(RevealActor(actors[i].transform, end));
             }
-            seatNames[i].text = member == null ? "빈자리" : member.name + (member.host ? "  ·  방장" : "");
-            seatStates[i].text = member == null ? "입장 대기"
+            seatNames[i].text = member?.name ?? "빈자리";
+            string readiness = member == null ? "입장 대기"
                 : !occupied ? "연결 끊김" : isReady ? "✓ 준비 완료" : "준비 중";
+            seatStates[i].text = member?.host == true ? "방장  " + readiness : readiness;
             plate.EnableInClassList("mine", i + 1 == packet.viewerSeat);
             seatStates[i].EnableInClassList("ready", isReady);
             if (occupied && !session.IsLocal && (entering || isReady != wasReady[i]))

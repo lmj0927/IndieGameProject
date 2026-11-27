@@ -36,6 +36,13 @@ public sealed class Play2FrontEnd : MonoBehaviour
         chatCanvas.GetComponent<Canvas>().sortingOrder = 10;
         hud = new Play2TableHud(canvasObject.transform, table, chatCanvas.Font, this);
         HudRoot = (RectTransform)canvasRect.Find("Game HUD");
+        ApplyTableTheme(!Play2TableAtmosphere.DarkRoom);
+    }
+
+    internal void ApplyTableTheme(bool village)
+    {
+        hud.SetVillageTheme(village);
+        chatCanvas.SetVillageTheme(village);
     }
 
     internal void AlignTableLabels() => hud?.AlignTableLabels();

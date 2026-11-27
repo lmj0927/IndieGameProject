@@ -44,7 +44,7 @@ internal sealed partial class Play2TableHud
     private readonly UnityEngine.UI.Button[] potButtons = new UnityEngine.UI.Button[4];
     private UnityEngine.UI.Slider amountSlider;
     internal bool CanOpenChat => packet != null && !settings.IsOpen && !handGuide.IsOpen;
-    internal bool CanOpenEmotes => !sizing.gameObject.activeSelf && !accusation.gameObject.activeSelf;
+    internal bool CanOpenEmotes => !actionMenuOpen && !sizing.gameObject.activeSelf && !accusation.gameObject.activeSelf;
     private long WholeStack
     {
         get { var self = packet.game.seats.First(s => s.seat == packet.viewerSeat); return self.stack + self.streetContribution; }
@@ -66,20 +66,20 @@ internal sealed partial class Play2TableHud
         this.table = table;
         this.owner = owner;
         root = Play2UGui.Fill("Game HUD", parent);
-        var leave = Play2HudArt.Button("Leave", root, "나가기", new Vector2(60, -32), new Vector2(92, 34),
+        leaveButton = Play2HudArt.Button("Leave", root, "나가기", new Vector2(60, -32), new Vector2(92, 34),
             "PlayingBadge", Play2UGui.Cream, font, table.Leave, 16);
-        leave.GetComponent<RectTransform>().anchorMin = leave.GetComponent<RectTransform>().anchorMax = Vector2.up;
-        var options = Play2HudArt.Button("Settings", root, "설정", new Vector2(-49, -32), new Vector2(70, 34),
+        leaveButton.GetComponent<RectTransform>().anchorMin = leaveButton.GetComponent<RectTransform>().anchorMax = Vector2.up;
+        settingsButton = Play2HudArt.Button("Settings", root, "설정", new Vector2(-49, -32), new Vector2(70, 34),
             "PlayingBadge", Play2UGui.Cream, font, OpenSettings, 16);
-        options.GetComponent<RectTransform>().anchorMin = options.GetComponent<RectTransform>().anchorMax = Vector2.one;
+        settingsButton.GetComponent<RectTransform>().anchorMin = settingsButton.GetComponent<RectTransform>().anchorMax = Vector2.one;
 
-        var potPanel = Play2HudArt.Plate("Table Pot", root, new Vector2(222, -35), new Vector2(216, 52), "PlayingBadge");
+        potPanel = Play2HudArt.Plate("Table Pot", root, new Vector2(222, -35), new Vector2(216, 52), "PlayingBadge");
         potPanel.GetComponent<UnityEngine.UI.Image>().color = Play2UGui.Hex("142023E8");
         potPanel.anchorMin = potPanel.anchorMax = Vector2.up;
-        potAndAnte = Play2UGui.Text("Pot Amount", potPanel, "", new Vector2(0, 6), new Vector2(194, 30), 23,
+        potAndAnte = Play2UGui.Text("Pot Amount", potPanel, "", new Vector2(0, 6), new Vector2(194, 30), 25,
             Play2UGui.Gold, font, TextAlignmentOptions.MidlineLeft, FontStyles.Bold);
         Play2HudArt.Fit(potAndAnte, 19);
-        var potShadow = potAndAnte.gameObject.AddComponent<UnityEngine.UI.Shadow>();
+        potShadow = potAndAnte.gameObject.AddComponent<UnityEngine.UI.Shadow>();
         potShadow.effectColor = new Color(0, 0, 0, .7f);
         potShadow.effectDistance = new Vector2(0, -2);
         street = Play2UGui.Text("Table Entry Fee", potPanel, "", new Vector2(0, -13), new Vector2(194, 18), 14,
@@ -92,6 +92,7 @@ internal sealed partial class Play2TableHud
         {
             var plate = Play2HudArt.Plate("Player " + (i + 1), root, Vector2.zero, new Vector2(152, 56), "PlayingBadge");
             seatPanels[i] = plate;
+            seatVisibility[i] = plate.gameObject.AddComponent<CanvasGroup>();
             var outline = plate.gameObject.AddComponent<UnityEngine.UI.Outline>();
             outline.effectColor = Play2UGui.Gold;
             outline.effectDistance = new Vector2(1, -1);
@@ -99,7 +100,7 @@ internal sealed partial class Play2TableHud
             seatOutlines[i] = outline;
             var line = Play2UGui.Panel("Turn Marker", plate, new Vector2(-69, 0), new Vector2(3, 38), Play2UGui.Gold);
             seatTurns[i] = line.GetComponent<UnityEngine.UI.Image>();
-            var label = Play2UGui.Text("Info", plate, "", new Vector2(0, 13), new Vector2(136, 20), 15,
+            var label = Play2UGui.Text("Info", plate, "", new Vector2(0, 13), new Vector2(136, 20), 17,
                 Play2UGui.Cream, font, style: FontStyles.Bold);
             label.richText = false;
             label.textWrappingMode = TextWrappingModes.NoWrap;
@@ -126,12 +127,12 @@ internal sealed partial class Play2TableHud
         Play2HudArt.Fit(notice, 12);
         noticePanel.gameObject.SetActive(false);
 
-        controls = Play2UGui.Panel("Action Keys", root, new Vector2(-200, 73), new Vector2(370, 118), Color.clear);
+        controls = Play2UGui.Panel("Turn Controls", root, new Vector2(-175, 72), new Vector2(318, 107), Color.clear);
         controls.anchorMin = controls.anchorMax = new Vector2(1, 0);
         baseActions = controls.gameObject.AddComponent<CanvasGroup>();
-        ownTurn = Play2HudArt.Plate("Your Turn", controls, new Vector2(-118, 35), new Vector2(111, 33), "PlayingBadge");
-        Play2UGui.Text("Prompt", ownTurn, "내 차례", Vector2.zero, new Vector2(104, 30), 18,
-            Play2UGui.Gold, font, style: FontStyles.Bold);
+        ownTurn = Play2UGui.Rect("Your Turn", controls, new Vector2(-91, 26), new Vector2(102, 34));
+        Play2UGui.Text("Prompt", ownTurn, "내 차례", Vector2.zero, new Vector2(102, 30), 20,
+            Play2UGui.Gold, font, TextAlignmentOptions.MidlineLeft, FontStyles.Bold);
         turn = Play2UGui.Text("Turn", root, "", Vector2.zero, new Vector2(246, 26), 18,
             Play2UGui.Cream, font, TextAlignmentOptions.Center, FontStyles.Bold);
         var turnShadow = turn.gameObject.AddComponent<UnityEngine.UI.Shadow>();
@@ -142,9 +143,8 @@ internal sealed partial class Play2TableHud
         string[] keys = { "F", "E", "R", "X" };
         for (int i = 0; i < keys.Length; i++)
         {
-            var position = i == 3 ? new Vector2(127, 36) : new Vector2(-119 + 119 * i, -15);
-            var size = i == 3 ? new Vector2(82, 29) : new Vector2(111, 51);
-            var row = Play2HudArt.Plate(keys[i] + " Action", controls, position, size, i == 2 ? "GoldButton" : "PlayingAction");
+            var row = Play2HudArt.Plate(keys[i] + " Action", controls, Vector2.zero, new Vector2(178, 46),
+                i == 1 ? "GoldButton" : "PlayingAction");
             int action = i;
             var actionButton = Play2HudArt.Clickable(row, () => PerformAction(action));
             var colors = actionButton.colors;
@@ -152,8 +152,8 @@ internal sealed partial class Play2TableHud
             actionButton.colors = colors;
             actionRows[i] = row.GetComponent<UnityEngine.UI.Image>();
             actionOpacity[i] = row.gameObject.AddComponent<CanvasGroup>();
-            actionLabels[i] = Play2UGui.Text("Action", row, "", Vector2.zero, size - new Vector2(10, 4), i == 3 ? 15 : 19,
-                i == 2 ? PaperInk : Play2UGui.Cream, font, style: FontStyles.Bold);
+            actionLabels[i] = Play2UGui.Text("Action", row, "", Vector2.zero, new Vector2(166, 38), i == 1 ? 22 : 18,
+                i == 1 ? PaperInk : Play2UGui.Cream, font, style: FontStyles.Bold);
             actionLabels[i].textWrappingMode = TextWrappingModes.NoWrap;
             Play2HudArt.Fit(actionLabels[i], 14);
         }
@@ -218,9 +218,10 @@ internal sealed partial class Play2TableHud
         photoNote.gameObject.SetActive(false);
         photoPose.gameObject.SetActive(false);
         settlementCard = new SettlementCard(root, font, AdvanceHand, table.ToggleRematchReady, table.WatchRemainingPractice);
-        topControls = new[] { (RectTransform)leave.transform, potPanel, handGuide.HelpButton,
-            (RectTransform)options.transform, noticePanel };
-        settings = new Play2InGameSettings((RectTransform)parent, font);
+        topControls = new[] { (RectTransform)leaveButton.transform, potPanel, handGuide.HelpButton,
+            (RectTransform)settingsButton.transform, noticePanel };
+        BuildVillageChrome(font);
+        settings = new Play2InGameSettings((RectTransform)parent, font, owner.ApplyTableTheme);
         root.gameObject.SetActive(false);
     }
 
@@ -271,10 +272,11 @@ internal sealed partial class Play2TableHud
         bool portrait = finale >= Play2MatchFinale.Beat.Portrait;
         bool resultBecameVisible = value.game.hasResult && settlementReady
             && (!wasSettlementReady || packet?.game.hasResult != true);
-        if (ReferenceEquals(packet, value) && lastStatus == status && wasDealing == dealing
+        if (!themeChanged && ReferenceEquals(packet, value) && lastStatus == status && wasDealing == dealing
             && wasSettlementReady == settlementReady && wasWaitingToReveal == table.WaitingToReveal && wasActionPending == actionPending && lastBeat == beat
             && lastFinale == finale && lastAwardIndex == table.AwardIndex && lastRevealingSeat == table.RevealingSeat
             && (!portrait || Mathf.Approximately(photoWidth, root.rect.width))) return;
+        themeChanged = false;
         bool awaitingWinner = beforeAward || (value.game.hasResult && !settlementReady && beat == Play2TablePreview.ShowdownBeat.None);
         var previousPacket = packet;
         var previous = previousPacket?.game;
@@ -334,14 +336,18 @@ internal sealed partial class Play2TableHud
         }
         street.gameObject.SetActive(game.postedAnte > 0 && !game.hasResult);
         street.text = EntryFee(game, packet.rules);
-        potAndAnte.rectTransform.anchoredPosition = new Vector2(0, street.gameObject.activeSelf ? 6 : 0);
+        if (!village) potAndAnte.rectTransform.anchoredPosition = new Vector2(0, street.gameObject.activeSelf ? 6 : 0);
+        phase.text = PhaseName(game.street);
         long paidTotal = 0;
+        long myShownStack = 0;
+        string myStatus = "";
         bool continuedHand = previous != null && previous.handId == game.handId && previousPacket.sessionId == packet.sessionId
             && previousPacket.viewerSeat == packet.viewerSeat;
         for (int i = 0; i < seatLabels.Length; i++)
         {
             var seat = game.seats.FirstOrDefault(s => s.seat == i + 1);
-            seatPanels[i].gameObject.SetActive(!group && seat != null && !(seat.viewer && dealing && game.board.Length == 0 && !game.hasResult));
+            seatPanels[i].gameObject.SetActive(!group && seat != null
+                && !(seat.viewer && (village || dealing && game.board.Length == 0 && !game.hasResult)));
             if (seat == null) continue;
             long displayedAward = showingAwards && table.CurrentAward != null
                 ? table.CurrentAward.PayoutThroughThisPot(game, seat.seat) : awaitingWinner ? 0L : seat.awarded;
@@ -388,17 +394,18 @@ internal sealed partial class Play2TableHud
             seatTurns[i].enabled = hasTurn || won && !seat.viewer;
             seatTurns[i].rectTransform.anchoredPosition = new Vector2(seat.viewer ? -94 : -69, 0);
             seatOutlines[i].enabled = hasTurn && !seat.viewer;
-            bool withStatus = hasTurn || won || !string.IsNullOrEmpty(seatStates[i].text);
-            seatLabels[i].rectTransform.anchoredPosition = new Vector2(0, withStatus ? 16 : 12);
-            seatStacks[i].rectTransform.anchoredPosition = new Vector2(0, seat.viewer ? 5 : withStatus ? -1 : -8);
-            seatPanels[i].GetComponent<UnityEngine.UI.Image>().color = seat.viewer
-                ? Color.clear : Play2UGui.Hex(won ? "473F2BEA" : hasTurn ? "14292FEF" : "10191C9E");
-            seatLabels[i].color = hasTurn || won ? Play2UGui.Gold : Play2UGui.Cream;
             if (hasTurn && !seat.viewer)
                 seatStates[i].text = "차례" + (seat.streetContribution > 0 ? $"  |  베팅 {seat.streetContribution}칩" : "");
+            DrawSeatTheme(i, seat.viewer, hasTurn, won);
+            if (seat.viewer)
+            {
+                myShownStack = shownStack;
+                myStatus = seatStates[i].text;
+            }
         }
         potAndAnte.text = paidTotal == 0 ? $"팟  {game.pot}칩"
-            : paidTotal < game.pot ? $"남은 팟  {game.pot - paidTotal}칩" : $"지급 완료  {paidTotal}칩";
+            : paidTotal < game.pot ? $"남은 팟  {game.pot - paidTotal}칩"
+            : village ? $"{paidTotal}칩 지급" : $"지급 완료  {paidTotal}칩";
         bool wasActing = acting;
         acting = game.hasLegal && game.currentSeat == packet.viewerSeat && !packet.paused
             && !game.hasResult && !game.dealPending && !game.revealPending && !dealing && !actionPending;
@@ -424,6 +431,7 @@ internal sealed partial class Play2TableHud
             UpdateSuspect();
         }
         handGuide.Present(packet, dealing, group);
+        handGuide.PresentWallet(myShownStack, myStatus);
         accusationHand.text = handGuide.CurrentRank;
         if (settlementReady && (finale == Play2MatchFinale.Beat.None || portrait)) settlementCard.Present(packet, settlement, table.IsHost, table.IsPractice, table.WatchingPractice, actionPending, DisplayName);
         else settlementCard.Hide();
@@ -465,6 +473,7 @@ internal sealed partial class Play2TableHud
 
     private void OpenSettings()
     {
+        CloseMoreActions();
         ClearSelection();
         settings.Open();
     }
@@ -517,6 +526,7 @@ internal sealed partial class Play2TableHud
     {
         if (packet == null || !root.gameObject.activeInHierarchy) return;
         var area = root.rect;
+        AlignVillageChrome();
         turn.rectTransform.anchoredPosition = new Vector2(0, (table.BoardTopViewportY - .5f) * area.height + 18f);
         for (int i = 0; i < seatPanels.Length; i++)
         {
@@ -524,19 +534,24 @@ internal sealed partial class Play2TableHud
             if (!plate.gameObject.activeSelf) continue;
             if (i + 1 == packet.viewerSeat)
             {
+                seatVisibility[i].alpha = 1f;
                 plate.anchoredPosition = new Vector2(-.17f * area.width, area.yMin + 43);
                 continue;
             }
 
             var point = table.PlayerLabelViewport(i + 1);
+            bool visible = point.z > 0f && point.x >= 0f && point.x <= 1f && point.y >= 0f && point.y <= 1f;
+            seatVisibility[i].alpha = visible ? 1f : 0f;
+            if (!visible) continue;
             Vector2 half = plate.rect.size * .5f;
             float x = Mathf.Clamp((point.x - .5f) * area.width, area.xMin + half.x + 8, area.xMax - half.x - 8);
             float y = Mathf.Clamp((point.y - .5f) * area.height + half.y + 8, area.yMin + 350, area.yMax - half.y - 4);
+            if (village) y = Mathf.Min(y, area.yMax - VillageBarHeight - half.y - 8);
             foreach (var control in topControls)
             {
                 if (!control.gameObject.activeSelf) continue;
                 var rect = control.rect;
-                var center = (Vector2)control.localPosition + rect.center;
+                var center = (Vector2)root.InverseTransformPoint(control.TransformPoint(rect.center));
                 if (Mathf.Abs(x - center.x) < half.x + rect.width / 2 + 4
                     && Mathf.Abs(y - center.y) < half.y + rect.height / 2 + 4)
                     y = center.y - rect.height / 2 - half.y - 4;
@@ -554,7 +569,11 @@ internal sealed partial class Play2TableHud
             if (keyboard.escapeKey.wasPressedThisFrame) settings.Close();
             return;
         }
-        if (chatFocused) return;
+        if (chatFocused)
+        {
+            CloseMoreActions();
+            return;
+        }
         if (handGuide.IsOpen)
         {
             if (keyboard.escapeKey.wasPressedThisFrame || keyboard.hKey.wasPressedThisFrame) handGuide.Close();
@@ -564,7 +583,8 @@ internal sealed partial class Play2TableHud
         bool selecting = sizing.gameObject.activeSelf || accusation.gameObject.activeSelf;
         if (!selecting && keyboard.escapeKey.wasPressedThisFrame)
         {
-            OpenSettings();
+            if (actionMenuOpen) CloseMoreActions();
+            else OpenSettings();
             return;
         }
         if (keyboard.hKey.wasPressedThisFrame && !selecting) handGuide.Toggle();
@@ -609,9 +629,11 @@ internal sealed partial class Play2TableHud
 
     private void DrawActions()
     {
-        ownTurn.gameObject.SetActive(acting);
-        foreach (var row in actionRows) row.gameObject.SetActive(acting);
-        if (!acting) return;
+        if (!acting)
+        {
+            CloseMoreActions();
+            return;
+        }
 
         var legal = packet.game.legal;
         string call = legal.callAmount > 0 ? $"콜 {legal.callAmount}칩" : "체크";
@@ -621,16 +643,15 @@ internal sealed partial class Play2TableHud
         SetAction(2, !legal.bet && !legal.raise && legal.hasAllInTarget ? "올인" : opening ? "베팅" : "레이즈",
             legal.bet || legal.raise || legal.hasAllInTarget);
         SetAction(3, "고발", packet.game.canAccuseOnTurn);
+        turnContext.text = legal.callAmount > 0 ? $"맞추려면 {legal.callAmount}칩" : "추가로 낼 칩 없음";
+        RefreshTurnControls();
     }
 
     private void SetAction(int index, string label, bool enabled)
     {
         actionRows[index].GetComponent<Play2ActionButton>().Intent = $"{packet.game.handId}:{packet.game.street}:{packet.game.version}:{label}";
         actionOpacity[index].interactable = enabled;
-        Play2HudArt.Apply(actionRows[index], enabled && index == 2 ? "GoldButton" : "PlayingAction");
-        if (!enabled) actionRows[index].color = Play2UGui.Hex("1A282BFF");
-        actionLabels[index].color = !enabled ? Play2UGui.Hex("8FA19FFF")
-            : index == 2 ? PaperInk : Play2UGui.Cream;
+        DrawActionTheme(index, enabled);
         actionLabels[index].text = label;
     }
 
@@ -758,8 +779,10 @@ internal sealed partial class Play2TableHud
             if (i >= suspects.Length) continue;
             bool selected = i == suspectIndex;
             plate.rectTransform.anchoredPosition = new Vector2((i - (suspects.Length - 1) * .5f) * 106, 22);
-            Play2HudArt.Apply(plate, selected ? "SelectedTarget" : "HeaderBadge");
-            suspectNames[i].color = selected ? PaperRed : Play2UGui.Cream;
+            Play2HudArt.Apply(plate, village
+                ? selected ? "MarketPrimary" : "MarketButton"
+                : selected ? "SelectedTarget" : "HeaderBadge");
+            suspectNames[i].color = selected ? PaperRed : village ? Play2HudArt.MarketInk : Play2UGui.Cream;
             suspectNames[i].text = Name(suspects[i]);
         }
     }
@@ -788,6 +811,7 @@ internal sealed partial class Play2TableHud
 
     private void CloseActionPanels()
     {
+        CloseMoreActions();
         sizing.gameObject.SetActive(false);
         accusation.gameObject.SetActive(false);
         SetPickerOpen(false);

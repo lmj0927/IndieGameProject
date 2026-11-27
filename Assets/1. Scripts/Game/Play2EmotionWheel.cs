@@ -19,6 +19,7 @@ internal sealed class Play2EmotionWheel : IDisposable
     private readonly Action<int> confirm;
     private Mouse mouse;
     private bool canOpen, cursorWasVisible, releasePending;
+    private bool village;
     private Vector2 direction, lastMousePosition;
     private int selected;
     internal bool IsOpen => mouse != null;
@@ -84,6 +85,8 @@ internal sealed class Play2EmotionWheel : IDisposable
         cursorWasVisible = Cursor.visible;
         Cursor.visible = false;
         direction = Vector2.zero;
+        village = !Play2TableAtmosphere.DarkRoom;
+        pointer.GetComponent<UnityEngine.UI.Image>().color = village ? Play2HudArt.MarketBrown : Play2UGui.Cream;
         overlay.SetAsLastSibling();
         overlay.gameObject.SetActive(true);
         UpdateSelection(Vector2.zero);
@@ -98,9 +101,10 @@ internal sealed class Play2EmotionWheel : IDisposable
         float sector = 360f / labels.Length;
         float angle = Mathf.Repeat(Mathf.Atan2(direction.x, direction.y) * Mathf.Rad2Deg, 360f);
         selected = outside ? Mathf.FloorToInt((angle + sector * .5f) / sector) % labels.Length : -1;
-        wheel.SetSelection(labels.Length, selected);
+        wheel.SetSelection(labels.Length, selected, village);
         for (int i = 0; i < labels.Length; i++)
-            labels[i].color = i == selected ? Play2UGui.Dark : Play2UGui.Cream;
+            labels[i].color = village ? i == selected ? Play2HudArt.MarketBrown : Play2HudArt.MarketInk
+                : i == selected ? Play2UGui.Dark : Play2UGui.Cream;
         centerLabel.text = selected < 0 ? "이모트 선택" : Labels[selected];
         centerHint.text = selected < 0 ? "마우스를 움직이세요" : "휠 버튼을 떼면 재생";
     }
